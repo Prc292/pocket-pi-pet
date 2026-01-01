@@ -36,10 +36,21 @@ sudo usermod -aG video,input <user>
 Set SDL environment variables appropriate for your hardware. Examples:
 
 - KMS (modern): `export SDL_VIDEODRIVER=kmsdrm`
-- Framebuffer fallback: `export SDL_VIDEODRIVER=fbcon` or `dispmanx`
+- Framebuffer fallback: `export SDL_VIDEODRIVER=fbcon` or `dispmanx` (helpful on older Pi kernels)
 - Audio: `export SDL_AUDIODRIVER=alsa`
 
 Use these in a systemd service file or your shell environment.
+
+GPU/Memory note for Pi 3B
+
+The default GPU memory split on Pi OS may be low; for smoother rendering increase GPU memory in `/boot/config.txt` (example):
+
+```
+# give the GPU 128MB (may improve display performance)
+gpu_mem=128
+```
+
+If you see choppy rendering, try lowering the app FPS (set `TAMAGOTCHI_FPS` env var) or increase GPU memory further to 192MB.
 
 5) Systemd service (optional auto-start)
 

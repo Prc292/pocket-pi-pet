@@ -30,3 +30,14 @@ def test_feed_action_triggers_sound():
     tamagotchi.pygame.event.post(evt)
     eng.step()
     assert eng.sounds.last_played == "feed"
+
+
+def test_sound_manager_check_output_dummy():
+    # Force dummy audio driver (headless) to simulate Pi-lite with no audio
+    os.environ['SDL_AUDIODRIVER'] = 'dummy'
+    eng = tamagotchi.GameEngine()
+    ok, info = eng.sounds.check_output()
+    # Even if mixer failed to init, check_output should return clean info
+    assert isinstance(ok, bool)
+    assert 'mixer_init' in info
+    del os.environ['SDL_AUDIODRIVER']

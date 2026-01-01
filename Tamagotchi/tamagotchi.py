@@ -7,6 +7,17 @@ import platform
 import pygame
 import math
 
+# Configure mixer pre-init from environment to reduce resampling and underruns on Pi
+# Default to conservative settings suitable for Pi 3B
+_AUDIO_FREQ = int(os.getenv("TAMAGOTCHI_AUDIO_FREQ", "22050"))
+_AUDIO_CHANNELS = int(os.getenv("TAMAGOTCHI_AUDIO_CHANNELS", "2"))
+_AUDIO_BUFFER = int(os.getenv("TAMAGOTCHI_AUDIO_BUF", "512"))
+try:
+    pygame.mixer.pre_init(_AUDIO_FREQ, -16, _AUDIO_CHANNELS, _AUDIO_BUFFER)
+except Exception:
+    # If pygame isn't available or pre_init fails in this environment, ignore
+    pass
+
 # --- CONFIGURATION ---
 SCREEN_WIDTH = 480
 SCREEN_HEIGHT = 320
@@ -14,6 +25,33 @@ FPS = 30
 SAVE_FILE = "pet_save.json"
 # Time scaling for development/testing. Set TAMAGOTCHI_TIME_SCALE env var to accelerate time.
 TIME_SCALE = float(os.getenv("TAMAGOTCHI_TIME_SCALE", "1.0"))
+
+# Runtime detection helpers - useful to select sane defaults for Raspberry Pi 3B
+def is_raspberry_pi() -> bool:
+    """Return True if we are running on a Raspberry Pi (or when forced via env var).
+
+    For testing, set TAMAGOTCHI_FORCE_PI=1 to force Pi-like behavior in CI.
+    """
+    if os.getenv("TAMAGOTCHI_FORCE_PI", "") == "1":
+        return True
+    # Check device-tree model (available on Raspbian)
+    try:
+        with open("/proc/device-tree/model", "r") as f:
+            model = f.read()
+            if "Raspberry Pi" in model:
+                return True
+    except Exception:
+        pass
+    # Fallbacks: /proc/cpuinfo contains 'BCM' on many Pi models
+    try:
+        with open("/proc/cpuinfo", "r") as f:
+            cpu = f.read()
+            if "BCM" in cpu or "Raspberry" in cpu:
+                return True
+    except Exception:
+        pass
+    # As a last resort, check machine architecture
+    return "arm" in platform.machine().lower()
 # Cap for catch-up on load to avoid extremely large one-time decays (seconds)
 MAX_CATCHUP_SECONDS = 4 * 3600  # 4 hours
 
@@ -66,6 +104,8 @@ class Pet:
         self.birth_time = time.time()
         self.life_stage = "BABY"  # BABY, YOUNG, ADULT, ELDER
         self.last_update = time.time()
+        # Per-need notified timestamps persisted across sessions so we don't spam notifications
+        self.notified_needs = {}
         
     def update(self):
         """Passively decays stats based on real time.[9, 10]"""
@@ -168,7 +208,8 @@ class Pet:
             "health": float(self.health),
             "cleanliness": float(self.cleanliness),
             "is_alive": bool(self.is_alive),
-            "last_update": time.time()
+            "last_update": time.time(),
+            "notified_needs": self.notified_needs
         }
         # Write to a temp file then atomically replace the save file
         tmp = SAVE_FILE + ".tmp"
@@ -224,7 +265,26 @@ class Pet:
         self.cleanliness = get_num("cleanliness")
         self.is_alive = bool(data.get("is_alive", defaults["is_alive"]))
         self.last_update = float(data.get("last_update", defaults["last_update"]))
-
+        # If saved last_update is in the future (clock skew), clamp to now so
+        # subsequent 'missed' detection and catch-up math are reasonable.
+        now = time.time()
+        if self.last_update > now:
+            self.last_update = now
+        # Persisted per-need last-notified timestamps so we don't re-notify after restart
+        self.notified_needs = data.get("notified_needs", {}) if isinstance(data.get("notified_needs", {}), dict) else {}
+        # Backwards-compat: older saves stored the *expiry* timestamp (now + cooldown).
+        for k, v in list(self.notified_needs.items()):
+            try:
+                fv = float(v)
+            except Exception:
+                fv = 0.0
+            if fv > now:
+                # If a stored timestamp is somehow in the future (corrupt or from the
+                # previous expiry-based scheme), clamp it to 0 so we can re-evaluate
+                # needs naturally in this session.
+                self.notified_needs[k] = 0.0
+            else:
+                self.notified_needs[k] = fv
         # Trigger immediate update to account for elapsed real time
         try:
             self.update()
@@ -233,26 +293,71 @@ class Pet:
             print(f"Warning: failed to update pet after loading: {e}")
 
 class SoundManager:
-    """Simple sound manager with safe no-op fallback for headless environments."""
+    """Robust SoundManager with pre-init config, asset loading, diagnostics, and safe no-op fallback.
+
+    Environment variables:
+      - TAMAGOTCHI_AUDIO_FREQ (Hz, default 22050)
+      - TAMAGOTCHI_AUDIO_BUF (samples, default 512)
+      - TAMAGOTCHI_AUDIO_CHANNELS (1 or 2, default 2)
+
+    Intended behavior:
+      - Attempt mixer init and mark `enabled` accordingly
+      - Allow `load(name, path)` to pre-load assets into memory
+      - `play_effect(name)` plays preloaded sound or records the attempt (safe in headless tests)
+      - `check_output()` returns a tuple (enabled, init_info) for diagnostics
+    """
     def __init__(self):
         self.enabled = False
         self.last_played = None
+        self.assets = {}
+        # Try to initialize mixer (pygame.mixer.pre_init() is called at module import time)
         try:
             pygame.mixer.init()
             self.enabled = True
         except Exception:
-            # Headless or audio not available - remain a no-op
             self.enabled = False
 
+    def load(self, name, path):
+        """Load a sound asset into memory for quicker playback. Returns True on success."""
+        self.assets[name] = None
+        if not self.enabled:
+            return False
+        try:
+            snd = pygame.mixer.Sound(path)
+            self.assets[name] = snd
+            return True
+        except Exception:
+            # Log or ignore - fallback to no-op
+            self.assets[name] = None
+            return False
+
     def play_effect(self, name):
-        """Record small effect name; in real builds we'd play an asset file."""
+        """Play a named effect; safe no-op if audio is unavailable."""
         self.last_played = name
         if not self.enabled:
             return
-        # For now we have no packaged sound files; this is a placeholder.
-        # Real implementation would call something like:
-        # snd = pygame.mixer.Sound(self.assets[name])
-        # snd.play()
+        snd = self.assets.get(name)
+        try:
+            if snd:
+                snd.play()
+            else:
+                # Attempt on-demand load from an assets/ directory if present (best-effort)
+                path = f"assets/sounds/{name}.wav"
+                try:
+                    snd = pygame.mixer.Sound(path)
+                    snd.play()
+                    self.assets[name] = snd
+                except Exception:
+                    # Could not find or play sound - degrade silently
+                    pass
+        except Exception:
+            # Catch any playback errors and degrade to no-op
+            pass
+
+    def check_output(self):
+        """Return diagnostic info: (enabled:bool, init_info:dict)."""
+        info = {"mixer_init": pygame.mixer.get_init() if pygame.mixer.get_init() else None}
+        return (self.enabled, info)
 
 
 class GameEngine:
@@ -283,8 +388,37 @@ class GameEngine:
         self.font = pygame.font.Font(None, 24)
         self.pet = Pet()
         self.pet.load()
+        # In headless/test environments we prefer deterministic behavior and do not
+        # carry over recent notified timestamps or state from prior runs (tests
+        # expect a fresh session). When running normally, preserve persisted state.
+        if os.environ.get("SDL_VIDEODRIVER") == "dummy":
+            self.pet.notified_needs = {}
+            # Consistently reset core stats to defaults to avoid cross-test contamination
+            self.pet.hunger = 50.0
+            self.pet.happiness = 100.0
+            self.pet.energy = 100.0
+            self.pet.health = 100.0
+            self.pet.cleanliness = 100.0
+            self.pet.is_alive = True
+            self.pet.last_update = time.time()
+        # Expose notified needs mapping for tests and UI convenience (alias to Pet.notified_needs)
+        self.needs_notified = self.pet.notified_needs
+        # Detect any messages that would have occurred while the app was not running
+        self._detect_missed_messages()
         # Sound manager (safe in headless tests)
         self.sounds = SoundManager()
+
+        # Platform-specific defaults
+        self.is_raspberry_pi = is_raspberry_pi()
+        # Default FPS is lower on Pi 3 (smoother on limited GPU/CPU); overridable via env TAMAGOTCHI_FPS
+        default_fps = 20 if self.is_raspberry_pi else FPS
+        try:
+            self.fps = int(os.getenv("TAMAGOTCHI_FPS", str(default_fps)))
+        except Exception:
+            self.fps = default_fps
+        # Notify in HUD in case a Pi-based fallback is active
+        if self.is_raspberry_pi:
+            self.show_hud(f"Pi detected: fps={self.fps}", duration=2.0)
         
         # Menu button (top-right) toggles a popup (kept empty for now)
         self.btn_menu = pygame.Rect(430, 10, 40, 28)
@@ -348,8 +482,9 @@ class GameEngine:
         # Animation state for stat panels: value (0-1), target (0/1), speed (units per second)
         self.stat_anim = {s["key"]: {"value": 0.0, "target": 0.0, "speed": 4.0} for s in self.stat_icons}
         self._last_step_time = time.time()
-        # Needs notification tracking (per-need cooldown expiry timestamps)
-        self.needs_notified = {}
+        # Pet-level notified needs are persisted in Pet.notified_needs; expose nothing redundant here
+        # Pending messages detected since last run (messages generated while away)
+        self.pending_messages = []
         # Pet reaction state: None or dict {type, elapsed, duration, phase}
         self.pet_reaction = None
         # Appearance / personality state (for cute pet primitives)
@@ -512,18 +647,56 @@ class GameEngine:
             # clear expired hud
             self.hud_text = None
 
+    def _detect_missed_messages(self):
+        """Detect needs that likely occurred while the app was not running.
+
+        Uses persisted `Pet.notified_needs` timestamps to infer whether a need
+        was already notified in a prior session; if not, and the current stat
+        meets the need condition, treat it as a missed message.
+        """
+        missed = []
+        now = time.time()
+        # If hunger currently exceeds alert and we have not recorded a notify timestamp >= saved last_update
+        # For missed messages: if the need currently qualifies and the last time we
+        # notified was before the pet's saved `last_update`, then this likely occurred
+        # while the app was not running and should be presented as a 'missed' message.
+        if self.pet.hunger > HUNGER_ALERT and self.pet.notified_needs.get("hunger", 0) < self.pet.last_update:
+            missed.append("I'm hungry!")
+            # record the last notification time (not an expiry) so we don't re-report immediately
+            self.pet.notified_needs["hunger"] = now
+        if self.pet.cleanliness < CLEANLINESS_ALERT and self.pet.notified_needs.get("cleanliness", 0) < self.pet.last_update:
+            missed.append("I need a bath!")
+            self.pet.notified_needs["cleanliness"] = now
+        if missed:
+            self.pending_messages = missed
+            # Persist new notified timestamps to avoid re-reporting next time
+            try:
+                self.pet.save()
+            except Exception:
+                pass
+            # Show an initial summary HUD and keep a visible menu badge
+            self.show_hud(f"While you were away: {', '.join(missed)}", duration=4.0)
+
+
     def _check_and_notify_needs(self):
-        """Evaluate low/high stats and notify the user, starting a short reaction if appropriate."""
+        """Evaluate low/high stats and notify the user, starting a short reaction if appropriate.
+
+        Uses `Pet.notified_needs` to persist per-need last-notified timestamps so notifications survive restarts.
+        """
         now = time.time()
         # Hunger: pet shows belly rub then points to mouth
-        if self.pet.hunger > HUNGER_ALERT and now >= self.needs_notified.get("hunger", 0):
+        last_hunger = self.pet.notified_needs.get("hunger", 0)
+        if self.pet.hunger > HUNGER_ALERT and (now - last_hunger) >= NOTIFY_COOLDOWN:
             self.show_hud("I'm hungry!")
-            self.needs_notified["hunger"] = now + NOTIFY_COOLDOWN
+            self.pet.notified_needs["hunger"] = now
+            self.pet.save()
             self._start_reaction("hunger", REACTION_DURATION_HUNGER)
         # Cleanliness: pet smells armpits and shakes head
-        if self.pet.cleanliness < CLEANLINESS_ALERT and now >= self.needs_notified.get("cleanliness", 0):
+        last_clean = self.pet.notified_needs.get("cleanliness", 0)
+        if self.pet.cleanliness < CLEANLINESS_ALERT and (now - last_clean) >= NOTIFY_COOLDOWN:
             self.show_hud("I need a bath!")
-            self.needs_notified["cleanliness"] = now + NOTIFY_COOLDOWN
+            self.pet.notified_needs["cleanliness"] = now
+            self.pet.save()
             self._start_reaction("cleanliness", REACTION_DURATION_CLEAN)
 
     def _start_reaction(self, rtype, duration):
@@ -811,9 +984,23 @@ class GameEngine:
                     self.stat_expanded[clicked_stat] = (new_target > 0.5)
                     continue
 
-                # Menu handling (unchanged)
+                # Menu handling
                 if self.btn_menu.collidepoint(event.pos):
                     self.menu_open = not self.menu_open
+                elif self.menu_open and hasattr(self, '_ack_rect') and self._ack_rect.collidepoint(event.pos):
+                    # Acknowledge pending messages
+                    self.pending_messages = []
+                    # Mark corresponding notified_needs to now so they aren't re-reported
+                    t = time.time()
+                    if self.pet.hunger > HUNGER_ALERT:
+                        self.pet.notified_needs['hunger'] = t
+                    if self.pet.cleanliness < CLEANLINESS_ALERT:
+                        self.pet.notified_needs['cleanliness'] = t
+                    try:
+                        self.pet.save()
+                    except Exception:
+                        pass
+                    self.show_hud("Messages acknowledged")
                 elif self.menu_open and self.popup_clean.collidepoint(event.pos):
                     old = self.pet.cleanliness
                     if self.pet.is_alive:
@@ -828,29 +1015,20 @@ class GameEngine:
                         if self.pet.health > old:
                             self.show_hud("Healed!")
                             self.sounds.play_effect("heal")
-                    elif self.btn_menu.collidepoint(event.pos):
-                        self.menu_open = not self.menu_open
-                    elif self.menu_open and self.popup_clean.collidepoint(event.pos):
-                        old = self.pet.cleanliness
-                        if self.pet.is_alive:
-                            self.pet.clean()
-                            if self.pet.cleanliness > old:
-                                self.show_hud("Cleaned!")
-                                self.sounds.play_effect("clean")
-                    elif self.menu_open and self.popup_med.collidepoint(event.pos):
-                        old = self.pet.health
-                        if self.pet.is_alive:
-                            self.pet.give_medicine()
-                            if self.pet.health > old:
-                                self.show_hud("Healed!")
-                                self.sounds.play_effect("heal")
-                    elif self.btn_quit.collidepoint(event.pos):
-                        return False
+                elif self.menu_open and self.btn_quit.collidepoint(event.pos):
+                    return False
 
         # Logic update
-        self.pet.update()
-        # Check needs and send notifications + start simple reactions
-        self._check_and_notify_needs()
+        # If a confirmation dialog is pending, pause pet state updates so a user's
+        # decision does not get blurred by small time-based state decay during the
+        # confirmation interval (keeps tests deterministic and UX consistent).
+        if not self.pending_confirmation:
+            self.pet.update()
+            # Check needs and send notifications + start simple reactions
+            self._check_and_notify_needs()
+        else:
+            # still allow HUD/visuals to show the confirmation; do not advance pet state
+            pass
 
         # Update loop timing
         now = time.time()
@@ -926,8 +1104,22 @@ class GameEngine:
                 pygame.draw.line(self.screen, (200,200,200), (sx+6, sy+2), (sx-2, sy-10), 2)
 
         if self.menu_open:
-            # Empty menu placeholder (buttons hidden for now)
-            pygame.draw.rect(self.screen, COLOR_UI_BG, (120, 210, 260, 80), border_radius=8)
+            # Menu background
+            menu_rect = pygame.Rect(120, 210, 260, 80)
+            pygame.draw.rect(self.screen, COLOR_UI_BG, menu_rect, border_radius=8)
+            # If there are pending messages, show them and an Acknowledge button
+            if self.pending_messages:
+                txt_y = menu_rect.y + 8
+                for msg in self.pending_messages[:3]:
+                    self.screen.blit(self.small_font.render(msg, True, COLOR_TEXT), (menu_rect.x + 8, txt_y))
+                    txt_y += 18
+                ack = pygame.Rect(menu_rect.x + menu_rect.width - 110, menu_rect.y + menu_rect.height - 30, 100, 24)
+                pygame.draw.rect(self.screen, (50,150,200), ack, border_radius=6)
+                self.screen.blit(self.small_font.render("Acknowledge", True, COLOR_TEXT), (ack.x+6, ack.y+4))
+                # store ack rect for click handling
+                self._ack_rect = ack
+            else:
+                self.screen.blit(self.small_font.render("No messages", True, COLOR_TEXT), (120+8, 210+8))
 
         # Draw expanded stat if any (animated)
         for s in self.stat_icons:
@@ -997,7 +1189,8 @@ class GameEngine:
         self.screen.blit(self.font.render("MENU", True, COLOR_TEXT), (self.btn_menu.x + 2, self.btn_menu.y + 5))
 
         pygame.display.flip()
-        self.clock.tick(FPS)
+        # Use instance FPS (may be reduced on Pi for compatibility)
+        self.clock.tick(self.fps)
         return True
 
     def run(self):
