@@ -1,1 +1,1 @@
--r Tamagotchi/requirements.txt
+-r requirements.txt
