@@ -1,1 +1,1 @@
--r /requirements-dev.txt
+pygame==2.6.1
