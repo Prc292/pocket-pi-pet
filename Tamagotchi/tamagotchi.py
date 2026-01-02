@@ -155,6 +155,14 @@ class Pet:
         if self.cleanliness < 30:
             self.health = max(0.0, self.health - (CLEANLINESS_HEALTH_PENALTY_PER_HOUR * (elapsed / 3600)))
 
+        # Passive health recovery (if not sick, not dead)
+        if self.is_alive and self.state not in ("SICK", "DEAD"):
+            # Optionally scale with average of other stats (happiness, energy, cleanliness)
+            avg_stats = (self.happiness + self.energy + self.cleanliness) / 3.0
+            # Recovery rate: up to 3 per hour if stats are perfect, less if not
+            recovery_per_hour = 3.0 * (avg_stats / 100.0)
+            self.health = min(100.0, self.health + (recovery_per_hour * (elapsed / 3600)))
+
         # Update life stage based on age and care
         age = now - self.birth_time
         prev_stage = self.life_stage
