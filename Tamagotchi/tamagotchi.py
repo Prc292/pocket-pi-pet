@@ -997,10 +997,30 @@ class GameEngine:
         inner_rect = body_rect.inflate(-8, -8)
         pygame.draw.ellipse(self.screen, self.pet_base_color, inner_rect)
 
-        # Ears / tuft
-        pygame.draw.polygon(self.screen, self.pet_base_color, [(cx-30, cy-40), (cx-22, cy-62), (cx-14, cy-38)])
-        pygame.draw.polygon(self.screen, self.pet_base_color, [(cx+30, cy-40), (cx+22, cy-62), (cx+14, cy-38)])
-        pygame.draw.circle(self.screen, self.pet_shade_color, (cx, cy-56), 6)
+        # 3D cat-like ears with right-side shadow
+        # Left ear (outer)
+        left_outer = [(cx-30, cy-40), (cx-22, cy-62), (cx-14, cy-38)]
+        pygame.draw.polygon(self.screen, self.pet_base_color, left_outer)
+        # Left ear (inner)
+        left_inner = [(cx-25, cy-44), (cx-22, cy-58), (cx-17, cy-40)]
+        pygame.draw.polygon(self.screen, (255, 220, 230), left_inner)
+        # Left ear shadow (right half)
+        left_shadow = [left_outer[1], (cx-18, cy-50), left_outer[2]]
+        shadow_surf = pygame.Surface((60, 40), pygame.SRCALPHA)
+        pygame.draw.polygon(shadow_surf, (120, 90, 110, 80), [(x-(cx-30), y-(cy-62)) for (x, y) in left_shadow])
+        self.screen.blit(shadow_surf, (cx-30, cy-62))
+
+        # Right ear (outer)
+        right_outer = [(cx+30, cy-40), (cx+22, cy-62), (cx+14, cy-38)]
+        pygame.draw.polygon(self.screen, self.pet_base_color, right_outer)
+        # Right ear (inner)
+        right_inner = [(cx+25, cy-44), (cx+22, cy-58), (cx+17, cy-40)]
+        pygame.draw.polygon(self.screen, (255, 220, 230), right_inner)
+        # Right ear shadow (right half)
+        right_shadow = [right_outer[0], right_outer[1], (cx+18, cy-50)]
+        shadow_surf2 = pygame.Surface((60, 40), pygame.SRCALPHA)
+        pygame.draw.polygon(shadow_surf2, (120, 90, 110, 80), [(x-(cx+14), y-(cy-62)) for (x, y) in right_shadow])
+        self.screen.blit(shadow_surf2, (cx+14, cy-62))
 
         # Eyes
         eye_y = cy - 12 + self.idle_bob_offset//2
