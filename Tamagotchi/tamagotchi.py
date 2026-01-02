@@ -6,6 +6,7 @@ import json
 import platform
 import pygame
 import math
+import signal
 
 # Configure mixer pre-init from environment to reduce resampling and underruns on Pi
 # Default to conservative settings suitable for Pi 3B
@@ -498,6 +499,39 @@ class GameEngine:
         # Expose some drawing flags for tests
         self._last_drawn_pet = {}
 
+        # Autosave state and signal handlers
+        self._autosave_interval = 30.0  # seconds
+        self._autosave_accum = 0.0
+        self._show_save_blink = 0.0
+
+        signal.signal(signal.SIGTERM, self._handle_sigterm)
+        signal.signal(signal.SIGINT, self._handle_sigterm)
+    def _handle_sigterm(self, signum, frame):
+        # Ensure we save before systemd / CTRL+C kills the process
+        try:
+            self._safe_save()
+        except Exception:
+            pass
+        pygame.quit()
+        raise SystemExit
+
+    def _safe_save(self):
+        # Call whatever save method exists without breaking older code
+        if hasattr(self, 'save_game') and callable(self.save_game):
+            self.save_game()
+        elif hasattr(self, 'save_state') and callable(self.save_state):
+            self.save_state()
+        elif hasattr(self, 'pet') and hasattr(self.pet, 'save') and callable(self.pet.save):
+            self.pet.save()
+        # trigger small on-screen blink
+        self._show_save_blink = 0.5
+
+    def _autosave_tick(self, dt):
+        self._autosave_accum += dt
+        if self._autosave_accum >= self._autosave_interval:
+            self._autosave_accum = 0.0
+            self._safe_save()
+
 
     def draw_bar(self, x, y, value, color, label):
         """Renders stat progress bars.[1, 14]"""
@@ -970,6 +1004,8 @@ class GameEngine:
         now = time.time()
         dt = now - getattr(self, "_last_step_time", now)
         self._last_step_time = now
+        # Autosave tick
+        self._autosave_tick(dt)
         # Update animations and other time-dependent helpers
         self._update_animations(dt)
         # Update pet reaction state
@@ -1122,6 +1158,11 @@ class GameEngine:
 
         # HUD rendering (centered above pet)
         self._render_hud(center)
+
+        # Tiny save indicator (blink) in HUD area
+        if self._show_save_blink > 0:
+            self._show_save_blink -= dt
+            pygame.draw.circle(self.screen, (200, 200, 200), (SCREEN_WIDTH - 10, 10), 4)
 
         # Draw always-visible action buttons at bottom
         # Feed button
