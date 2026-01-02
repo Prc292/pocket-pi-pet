@@ -435,6 +435,9 @@ class GameEngine:
         # Popup button rects (hidden until menu_open)
         self.popup_clean = pygame.Rect(140, 220, 100, 50)
         self.popup_med = pygame.Rect(260, 220, 100, 50)
+        # System control buttons in menu (shutdown / restart)
+        self.popup_shutdown = pygame.Rect(140, 280, 100, 40)
+        self.popup_restart = pygame.Rect(260, 280, 100, 40)
         # HUD message (transient, centered above pet)
         self.hud_text = None
         self.hud_expiry = 0.0
@@ -1068,7 +1071,20 @@ class GameEngine:
                         if self.pet.health > old:
                             self.show_hud("Healed!")
                             self.sounds.play_effect("heal")
-                elif self.menu_open and self.btn_quit.collidepoint(event.pos):
+                elif self.menu_open and self.popup_shutdown.collidepoint(event.pos):
+                    # Save state and perform (or simulate) a shutdown
+                    try:
+                        self.pet.save()
+                    except Exception:
+                        pass
+                    self._perform_system_action("shutdown")
+                elif self.menu_open and self.popup_restart.collidepoint(event.pos):
+                    try:
+                        self.pet.save()
+                    except Exception:
+                        pass
+                    self._perform_system_action("restart")
+                elif self.menu_open and hasattr(self, 'btn_quit') and self.btn_quit.collidepoint(event.pos):
                     return False
 
         # Logic update
@@ -1175,8 +1191,8 @@ class GameEngine:
                 pygame.draw.line(self.screen, (200,200,200), (sx+6, sy+2), (sx-2, sy-10), 2)
 
         if self.menu_open:
-            # Menu background
-            menu_rect = pygame.Rect(120, 210, 260, 80)
+            # Menu background (taller to accomodate system buttons)
+            menu_rect = pygame.Rect(120, 210, 260, 140)
             pygame.draw.rect(self.screen, COLOR_UI_BG, menu_rect, border_radius=8)
             # If there are pending messages, show them and an Acknowledge button
             if self.pending_messages:
@@ -1184,13 +1200,23 @@ class GameEngine:
                 for msg in self.pending_messages[:3]:
                     self.screen.blit(self.small_font.render(msg, True, COLOR_TEXT), (menu_rect.x + 8, txt_y))
                     txt_y += 18
-                ack = pygame.Rect(menu_rect.x + menu_rect.width - 110, menu_rect.y + menu_rect.height - 30, 100, 24)
+                ack = pygame.Rect(menu_rect.x + menu_rect.width - 110, menu_rect.y + menu_rect.height - 50, 100, 24)
                 pygame.draw.rect(self.screen, (50,150,200), ack, border_radius=6)
                 self.screen.blit(self.small_font.render("Acknowledge", True, COLOR_TEXT), (ack.x+6, ack.y+4))
                 # store ack rect for click handling
                 self._ack_rect = ack
             else:
                 self.screen.blit(self.small_font.render("No messages", True, COLOR_TEXT), (120+8, 210+8))
+            # Draw popup quick-actions
+            pygame.draw.rect(self.screen, (80,80,80), self.popup_clean, border_radius=6)
+            self.screen.blit(self.small_font.render("Clean", True, COLOR_TEXT), (self.popup_clean.x + 10, self.popup_clean.y + 12))
+            pygame.draw.rect(self.screen, (80,80,80), self.popup_med, border_radius=6)
+            self.screen.blit(self.small_font.render("Med", True, COLOR_TEXT), (self.popup_med.x + 20, self.popup_med.y + 12))
+            # System buttons
+            pygame.draw.rect(self.screen, (200, 80, 60), self.popup_shutdown, border_radius=6)
+            self.screen.blit(self.small_font.render("Shutdown", True, COLOR_TEXT), (self.popup_shutdown.x + 6, self.popup_shutdown.y + 10))
+            pygame.draw.rect(self.screen, (200, 120, 60), self.popup_restart, border_radius=6)
+            self.screen.blit(self.small_font.render("Restart", True, COLOR_TEXT), (self.popup_restart.x + 10, self.popup_restart.y + 10))
 
         # Draw expanded stat if any (animated)
         for s in self.stat_icons:
@@ -1259,10 +1285,56 @@ class GameEngine:
         pygame.draw.rect(self.screen, (100, 100, 100), self.btn_menu, border_radius=6)
         self.screen.blit(self.font.render("MENU", True, COLOR_TEXT), (self.btn_menu.x + 2, self.btn_menu.y + 5))
 
+        # Optionally draw a small quit area (useful for desktop debugging)
+        self.btn_quit = pygame.Rect(8, SCREEN_HEIGHT - 36, 80, 28)
+        pygame.draw.rect(self.screen, (120,80,80), self.btn_quit, border_radius=6)
+        self.screen.blit(self.small_font.render("Quit", True, COLOR_TEXT), (self.btn_quit.x + 8, self.btn_quit.y + 6))
+
         pygame.display.flip()
         # Use instance FPS (may be reduced on Pi for compatibility)
         self.clock.tick(self.fps)
         return True
+
+    def _perform_system_action(self, action):
+        """Perform or simulate a system action: 'shutdown' or 'restart'.
+
+        Behavior:
+        - Always persist state (pet.save()) before attempting action.
+        - If TAMAGOTCHI_ALLOW_SYSTEM_ACTIONS=1 and we detect Raspberry Pi, try to
+          invoke the system command; otherwise record a simulated action for
+          tests and show a HUD message.
+        - Store last system action in `self._last_system_action` for inspection.
+        """
+        allowed = os.getenv("TAMAGOTCHI_ALLOW_SYSTEM_ACTIONS", "0") == "1"
+        cmd = None
+        if action == "shutdown":
+            cmd = ["sudo", "shutdown", "-h", "now"]
+            msg = "Shutting down..."
+        elif action == "restart":
+            cmd = ["sudo", "reboot"]
+            msg = "Restarting..."
+        else:
+            return
+
+        # Persist state
+        try:
+            self.pet.save()
+        except Exception:
+            pass
+
+        # Default: simulate and don't execute unless explicitly allowed and we are on Pi
+        simulated = True
+        if allowed and self.is_raspberry_pi:
+            try:
+                import subprocess
+                subprocess.run(cmd, check=False)
+                simulated = False
+            except Exception:
+                simulated = True
+        # Record last action for tests / diagnostics
+        self._last_system_action = {"action": action, "simulated": simulated}
+        # Notify user
+        self.show_hud(msg)
 
     def run(self):
         running = True
