@@ -992,10 +992,31 @@ class GameEngine:
         body_w = 110 + int(self.belly_squish * 14)
         body_h = 90 - int(self.belly_squish * 10)
         body_rect = pygame.Rect(cx - body_w//2, cy - body_h//2, body_w, body_h)
-        # Soft shading: draw two overlapping ellipses
+
+        # --- Arms (drawn behind body, filled, with right-side shadow) ---
+        arm_color = (200, 170, 190)
+        arm_shadow = (140, 110, 130)
+        # Left arm
+        left_arm_rect = (cx - body_w//2 - 18, cy - 10, 36, 18)
+        pygame.draw.ellipse(self.screen, arm_color, left_arm_rect)
+        pygame.draw.ellipse(self.screen, arm_shadow, (left_arm_rect[0]+14, left_arm_rect[1], 14, left_arm_rect[3]))
+        # Right arm
+        right_arm_rect = (cx + body_w//2 - 18, cy - 10, 36, 18)
+        pygame.draw.ellipse(self.screen, arm_color, right_arm_rect)
+        pygame.draw.ellipse(self.screen, arm_shadow, (right_arm_rect[0]+14, right_arm_rect[1], 14, right_arm_rect[3]))
+
+        # --- Body (drawn over arms) ---
         pygame.draw.ellipse(self.screen, self.pet_shade_color, body_rect)
         inner_rect = body_rect.inflate(-8, -8)
         pygame.draw.ellipse(self.screen, self.pet_base_color, inner_rect)
+
+        # --- Legs (small ellipses at bottom) ---
+        leg_color = (160, 120, 140)
+        leg_w, leg_h = 22, 16
+        # Left leg
+        pygame.draw.ellipse(self.screen, leg_color, (cx - 28, cy + body_h//2 - 6, leg_w, leg_h))
+        # Right leg
+        pygame.draw.ellipse(self.screen, leg_color, (cx + 6, cy + body_h//2 - 6, leg_w, leg_h))
 
         # 3D cat-like ears with right-side shadow
         # Left ear (outer)
