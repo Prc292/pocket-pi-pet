@@ -169,8 +169,37 @@ class GameEngine:
 
             cx, cy = SCREEN_WIDTH // 2, 160
             if self.pet.life_stage == "EGG":
-                wobble = 4 * math.sin(time.time() * 12)
-                pygame.draw.ellipse(self.screen, (245, 245, 210), (cx-25+wobble, cy-35, 50, 70))
+                # Egg shake timing
+                cycle_time = 5.5  # total cycle: 5s still + 0.5s shake
+                t = time.time() % cycle_time
+                if t < 5.0:
+                    angle = 0  # still
+                else:
+                    # quick shake
+                    angle = 15 * math.sin(20 * (t-5.0) * math.pi)
+
+                # Draw egg surface
+                egg_surf = pygame.Surface((50, 70), pygame.SRCALPHA)
+                pygame.draw.ellipse(egg_surf, (245, 245, 210), (0, 0, 50, 70))
+
+                # Draw cracks progressively
+                hatch_progress = min(1.0, (time.time() - self.pet.birth_time) / 30.0)
+                if hatch_progress > 0:
+                    num_cracks = int(5 * hatch_progress)
+                    for i in range(num_cracks):
+                        offset = i * 8 - 16
+                        points = [
+                            (25, 20+offset),
+                            (15, 30+offset),
+                            (35, 40+offset),
+                            (15, 50+offset),
+                            (35, 55+offset)
+                        ]
+                        pygame.draw.lines(egg_surf, (180, 180, 160), False, points, 2)
+
+                rotated_egg = pygame.transform.rotate(egg_surf, angle)
+                rect = rotated_egg.get_rect(center=(cx, cy))
+                self.screen.blit(rotated_egg, rect.topleft)
             elif not self.pet.is_alive:
                 pygame.draw.circle(self.screen, (80, 80, 80), (cx, cy), 45)
                 self.screen.blit(self.font.render("RIP", True, (200, 200, 200)), (cx-12, cy-8))
