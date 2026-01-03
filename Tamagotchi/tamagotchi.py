@@ -111,7 +111,7 @@ class Pet:
         self.health = 100.0
         self.cleanliness = 100.0
         self.is_alive = True
-        self.state = "HAPPY" # HAPPY, SAD, SICK, DEAD
+        self.state = "OK" # OK, SAD, SICK, DEAD
         # Life/age tracking for evolution
         self.birth_time = time.time()
         self.life_stage = "BABY"  # BABY, YOUNG, ADULT, ELDER
@@ -189,10 +189,21 @@ class Pet:
             self.is_alive = False
         elif self.health < 40 or self.hunger > 90:
             self.state = "SICK"
-        elif self.happiness < 40:
-            self.state = "SAD"
         else:
-            self.state = "HAPPY"
+            # SAD logic: Only if multiple needs are critically low
+            critical_needs = 0
+            if self.happiness < 40:
+                critical_needs += 1
+            if self.energy < 20:
+                critical_needs += 1
+            if self.cleanliness < 30:
+                critical_needs += 1
+            if self.hunger > 80:
+                critical_needs += 1
+            if critical_needs >= 2:
+                self.state = "SAD"
+            else:
+                self.state = "OK"
 
     def feed(self):
         if self.is_alive:
@@ -435,6 +446,7 @@ class GameEngine:
                 print("Warning: no fast renderer available")
             
         pygame.display.set_caption("Pocket Pi-Pet")
+        pygame.mouse.set_visible(False)  # Hide mouse cursor for touchscreen
         self.clock = pygame.time.Clock()
         self.font = pygame.font.Font(None, 24)
         self.pet = Pet()
@@ -1035,29 +1047,29 @@ class GameEngine:
             pygame.draw.rect(self.screen, self.pet_shade_color, (cx-eye_x_off-eye_r, eye_y-4, eye_r*2, 8), border_radius=6)
             pygame.draw.rect(self.screen, self.pet_shade_color, (cx+eye_x_off-eye_r, eye_y-4, eye_r*2, 8), border_radius=6)
 
-        # Mouth (vary by pet.state and reactions)
+        # Mouth expression logic:
         mouth_y = cy + 8
         mouth_w = 28
         mouth_h = 10
         mouth_color = (60, 30, 30)
         mouth_rect = pygame.Rect(cx - mouth_w//2, mouth_y - mouth_h//2, mouth_w, mouth_h)
-        # expression overrides
+        # Expression logic:
+        # - Happy by default
+        # - Sad only if explicitly SAD or SICK
+        # - Temporary overrides for reactions
         if self.pet_reaction and self.pet_reaction.get("type") == "hunger" and self.pet_reaction.get("phase") == 1:
             # surprised open mouth (oval)
             pygame.draw.ellipse(self.screen, mouth_color, mouth_rect.inflate(-8, 0))
         elif self.pet.state == "SICK":
-            # small frown
-            pygame.draw.arc(self.screen, mouth_color, mouth_rect, math.pi*0.25, math.pi*0.75, 3)
+            # sick frown
+            pygame.draw.arc(self.screen, mouth_color, mouth_rect, math.radians(0), math.radians(180), 3)
         elif self.pet.state == "SAD":
-            # downturned slight arc
-            pygame.draw.arc(self.screen, mouth_color, mouth_rect, math.pi*0.25, math.pi*0.75, 2)
-        elif self.pet.happiness > 80 and self.pet.state != "SICK":
-            # bigger happy smile
-            mouth_rect = pygame.Rect(cx - 14, mouth_y - 2, 28, 12)
+            # sad frown
             pygame.draw.arc(self.screen, mouth_color, mouth_rect, math.radians(0), math.radians(180), 3)
         else:
-            # smile as small curve (filled rect with rounded corners)
-            pygame.draw.rect(self.screen, mouth_color, (cx-10, mouth_y, 20, 6), border_radius=4)
+            # happy smile
+            mouth_rect = pygame.Rect(cx - 14, mouth_y - 2, 28, 12)
+            pygame.draw.arc(self.screen, mouth_color, mouth_rect, math.radians(180), math.radians(360), 3)
 
         # Belly squish overlay (subtle: draw a darker band when squished)
         if self.belly_squish > 0.01:
