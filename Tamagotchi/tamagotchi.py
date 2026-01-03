@@ -11,7 +11,7 @@ import math
 SCREEN_WIDTH = 480
 SCREEN_HEIGHT = 320
 FPS = 30
-SAVE_FILE = "pet_save.json"
+SAVE_FILE = os.path.join(os.path.dirname(__file__), ".pet_save.json")
 
 # Retro UI Palette
 COLOR_BG = (40, 44, 52)
