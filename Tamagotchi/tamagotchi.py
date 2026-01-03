@@ -69,6 +69,7 @@ class Pet:
         if self.is_alive and self.life_stage!= "EGG":
             self.happiness = min(100.0, self.happiness + 20.0)
             self.energy = max(0.0, self.energy - 10.0)
+            self.hunger = min(100.0, self.hunger + 5.0)  # small fullness decrease
 
     def save(self):
         data = {
@@ -142,10 +143,10 @@ class GameEngine:
         m_rect = (x-10, y+5, 20, 10)
         if self.pet.state == "EATING":
             pygame.draw.circle(self.screen, (200, 50, 50), (x, y+12), 6)
-        elif self.pet.health < 40:
-            pygame.draw.arc(self.screen, COLOR_PET_EYES, m_rect, 0, 3.14, 2)
+        elif self.pet.health < 50 or self.pet.energy < 20:
+            pygame.draw.arc(self.screen, COLOR_PET_EYES, m_rect, 0, 3.14, 2)  # sad mouth
         else:
-            pygame.draw.arc(self.screen, COLOR_PET_EYES, m_rect, 3.14, 0, 2)
+            pygame.draw.arc(self.screen, COLOR_PET_EYES, m_rect, 3.14, 0, 2)   # smile
 
     def run(self):
         running = True
@@ -153,9 +154,16 @@ class GameEngine:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT: running = False
                 if event.type == pygame.MOUSEBUTTONDOWN:
-                    if self.btn_feed.collidepoint(event.pos): self.pet.feed()
+                    # Feeding always reduces hunger, but only boosts energy if FULLNESS <= 80%
+                    if self.btn_feed.collidepoint(event.pos) and self.pet.hunger > 0:
+                        # Only boost energy if fullness is <= 80%
+                        if (100 - self.pet.hunger) <= 80:
+                            self.pet.energy = min(80, self.pet.energy + 5)
+                        self.pet.feed()
                     elif self.btn_play.collidepoint(event.pos): self.pet.play()
-                    elif self.btn_sleep.collidepoint(event.pos): self.pet.energy = min(100, self.pet.energy + 30)
+                    elif self.btn_sleep.collidepoint(event.pos):
+                        self.pet.energy = min(100, self.pet.energy + 30)
+                        self.pet.hunger = min(100.0, self.pet.hunger + 5.0)  # small fullness decrease
                     elif self.btn_quit.collidepoint(event.pos): running = False
 
             self.pet.update()
@@ -206,9 +214,17 @@ class GameEngine:
             else:
                 bounce = 10 * abs(math.sin(time.time() * 4))
                 self.draw_pet_face(cx, cy + int(bounce), 45)
+                # Low Hunger Notification
+                if self.pet.hunger > 80 and self.pet.is_alive:
+                    notif_text = self.font.render("Your pet is hungry!", True, (255, 120, 50))
+                    self.screen.blit(notif_text, (SCREEN_WIDTH//2 - notif_text.get_width()//2, 40))
+                # Low Energy Notification
+                if self.pet.energy < 20 and self.pet.is_alive:
+                    notif_text = self.font.render("Your pet is exhausted!", True, (255, 100, 50))
+                    self.screen.blit(notif_text, (SCREEN_WIDTH//2 - notif_text.get_width()//2, 60))
                 # Low Happiness Notification
                 if self.pet.happiness < 30 and self.pet.is_alive:
-                    notif_text = self.font.render("Pet is unhappy!", True, (255, 200, 50))
+                    notif_text = self.font.render("Your pet is unhappy!", True, (255, 200, 50))
                     self.screen.blit(notif_text, (SCREEN_WIDTH//2 - notif_text.get_width()//2, 80))
                 if self.pet.state == "EATING" and (pygame.time.get_ticks() % 1000 < 50):
                     self.pet.state = "IDLE"
