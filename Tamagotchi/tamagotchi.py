@@ -100,7 +100,23 @@ COLOR_HAPPY = (255, 255, 0)
 # --- CLASS DEFINITIONS ---
 
 class Pet:
-    """Handles the biological logic and persistence of the virtual pet.[7, 8]"""
+    """Handles the biological logic and persistence of the virtual pet, including state transitions."""
+
+    # Define possible states
+    # Mood/condition states
+    STATE_OK = "OK"
+    STATE_SAD = "SAD"
+    STATE_SICK = "SICK"
+    STATE_DEAD = "DEAD"
+    # Evolution/life stages
+    STAGE_EGG = "EGG"
+    STAGE_BABY = "BABY"
+    STAGE_YOUNG = "YOUNG"
+    STAGE_ADULT = "ADULT"
+    STAGE_ELDER = "ELDER"
+
+    EGG_HATCH_SECONDS = 30  # Time in seconds before egg hatches (adjust as needed)
+
     def __init__(self):
         # Stats Range 0 - 100
         self.hunger = 50.0   # 0 = Full, 100 = Starving
@@ -111,20 +127,31 @@ class Pet:
         self.health = 100.0
         self.cleanliness = 100.0
         self.is_alive = True
-        self.state = "OK" # OK, SAD, SICK, DEAD
-        # Life/age tracking for evolution
+        # Start in EGG life stage, mood is OK
+        self.state = self.STATE_OK
         self.birth_time = time.time()
-        self.life_stage = "BABY"  # BABY, YOUNG, ADULT, ELDER
+        self.life_stage = self.STAGE_EGG
         self.last_update = time.time()
-        # Per-need notified timestamps persisted across sessions so we don't spam notifications
         self.notified_needs = {}
-        # Track last interaction time for happiness decay
         self.last_interaction = time.time()
+
+    def set_state(self, new_state):
+        """Switch to a new mood/condition state (not life stage)."""
+        valid_states = {
+            self.STATE_OK, self.STATE_SAD, self.STATE_SICK, self.STATE_DEAD
+        }
+        if new_state not in valid_states:
+            raise ValueError(f"Invalid state: {new_state}")
+        print(f"[DEBUG] State changing from {self.state} to {new_state}")
+        self.state = new_state
+
+    def get_state(self):
+        return self.state
         
     def update(self):
-        """Passively decays stats based on real time.[9, 10]"""
+        """Passively decays stats based on real time and updates state."""
         if not self.is_alive:
-            self.state = "DEAD"
+            self.set_state(self.STATE_DEAD)
             return
 
         now = time.time()
@@ -134,10 +161,16 @@ class Pet:
         elapsed = elapsed * TIME_SCALE
         self.last_update = now
 
-        # Decay Rates (Units per hour)
+        # Handle EGG life stage and hatching
+        if self.life_stage == self.STAGE_EGG:
+            if now - self.birth_time >= self.EGG_HATCH_SECONDS:
+                self.life_stage = self.STAGE_BABY
+                print(f"[DEBUG] Egg hatched: life_stage is now {self.life_stage}")
+            return  # No stat decay while in egg
+
+        # ...existing code for stat decay and state transitions...
         inc_hunger = HUNGER_DECAY_PER_HOUR * (elapsed / 3600)
         self.hunger = min(100.0, self.hunger + inc_hunger)
-        # --- Happiness decay: faster if neglected ---
         elapsed_since_interaction = now - getattr(self, "last_interaction", now)
         decay = HAPPINESS_DECAY_PER_HOUR * (elapsed / 3600)
         if elapsed_since_interaction > 3600:
@@ -146,51 +179,40 @@ class Pet:
             decay *= 2.0
         self.happiness = max(0.0, self.happiness - decay)
         print(f"[DEBUG] happiness changed to {self.happiness} in update()")
-        # self.happiness = max(0.0, self.happiness - (HAPPINESS_DECAY_PER_HOUR * (elapsed / 3600)))  # previous single-line decay
         self.energy = max(0.0, self.energy - (ENERGY_DECAY_PER_HOUR * (elapsed / 3600)))
         print(f"[DEBUG] energy changed to {self.energy} in update()")
-        # Cleanliness decays over time
         self.cleanliness = max(0.0, self.cleanliness - (CLEANLINESS_DECAY_PER_HOUR * (elapsed / 3600)))
 
-        # Logic for health and state transitions [3]
         if self.hunger > 80 or self.energy < 20:
             self.health = max(0.0, self.health - (HEALTH_DECAY_CONDITIONAL_PER_HOUR * (elapsed / 3600)))
-        # Additional health penalty when cleanliness is poor
         if self.cleanliness < 30:
             self.health = max(0.0, self.health - (CLEANLINESS_HEALTH_PENALTY_PER_HOUR * (elapsed / 3600)))
 
-        # Passive health recovery (if not sick, not dead)
-        if self.is_alive and self.state not in ("SICK", "DEAD"):
-            # Optionally scale with average of other stats (happiness, energy, cleanliness)
+        if self.is_alive and self.state not in (self.STATE_SICK, self.STATE_DEAD):
             avg_stats = (self.happiness + self.energy + self.cleanliness) / 3.0
-            # Recovery rate: up to 3 per hour if stats are perfect, less if not
             recovery_per_hour = 3.0 * (avg_stats / 100.0)
             self.health = min(100.0, self.health + (recovery_per_hour * (elapsed / 3600)))
 
-        # Update life stage based on age and care
         age = now - self.birth_time
         prev_stage = self.life_stage
-        # Determine candidate stage by age
         if age >= STAGE_ELDER_SECONDS:
-            candidate = "ELDER"
+            candidate = self.STAGE_ELDER
         elif age >= STAGE_ADULT_SECONDS:
-            candidate = "ADULT"
+            candidate = self.STAGE_ADULT
         elif age >= STAGE_YOUNG_SECONDS:
-            candidate = "YOUNG"
+            candidate = self.STAGE_YOUNG
         else:
-            candidate = "BABY"
-        # Evolve only if care (avg of health & happiness) meets threshold when crossing a boundary
+            candidate = self.STAGE_BABY
         avg_care = (self.health + self.happiness) / 2.0
         if candidate != prev_stage and avg_care >= EVOLUTION_MIN_CARE:
             self.life_stage = candidate
-        # Note: if care is insufficient, pet stays in previous stage and may evolve later
-        
+
         if self.health <= 0:
             self.is_alive = False
+            self.set_state(self.STATE_DEAD)
         elif self.health < 40 or self.hunger > 90:
-            self.state = "SICK"
+            self.set_state(self.STATE_SICK)
         else:
-            # SAD logic: Only if multiple needs are critically low
             critical_needs = 0
             if self.happiness < 40:
                 critical_needs += 1
@@ -201,9 +223,9 @@ class Pet:
             if self.hunger > 80:
                 critical_needs += 1
             if critical_needs >= 2:
-                self.state = "SAD"
+                self.set_state(self.STATE_SAD)
             else:
-                self.state = "OK"
+                self.set_state(self.STATE_OK)
 
     def feed(self):
         if self.is_alive:
@@ -250,10 +272,7 @@ class Pet:
             print(f"[DEBUG] energy changed to {self.energy} in clean()")
 
     def save(self):
-        """Persists state to JSON for cross-session survival.[1, 2, 11]
-
-        Uses a simple atomic replace pattern to avoid truncated saves.
-        """
+        """Persists state to JSON for cross-session survival, including state and life_stage."""
         data = {
             "hunger": float(self.hunger),
             "happiness": float(self.happiness),
@@ -262,19 +281,18 @@ class Pet:
             "cleanliness": float(self.cleanliness),
             "is_alive": bool(self.is_alive),
             "last_update": time.time(),
-            "notified_needs": self.notified_needs
+            "notified_needs": self.notified_needs,
+            "state": self.state,  # mood/condition
+            "life_stage": self.life_stage,  # evolution
+            "birth_time": self.birth_time
         }
-        # Write to a temp file then atomically replace the save file
         tmp = SAVE_FILE + ".tmp"
         with open(tmp, 'w') as f:
             json.dump(data, f)
         os.replace(tmp, SAVE_FILE)
 
     def load(self):
-        """Loads data and handles 'catch-up' logic for elapsed time.[1]
-
-        Defensive: handles missing or malformed files and missing keys.
-        """
+        """Loads data and handles 'catch-up' logic for elapsed time, including state and life_stage."""
         defaults = {
             "hunger": 50.0,
             "happiness": 100.0,
@@ -282,19 +300,26 @@ class Pet:
             "health": 100.0,
             "cleanliness": 100.0,
             "is_alive": True,
-            "last_update": time.time()
+            "last_update": time.time(),
+            "state": self.STATE_OK,
+            "life_stage": self.STAGE_EGG,
+            "birth_time": time.time()
         }
 
         if not os.path.exists(SAVE_FILE):
-            # No save present; use defaults
+            # Always start from EGG if no save exists
             self.hunger = defaults["hunger"]
             self.happiness = defaults["happiness"]
             print(f"[DEBUG] happiness set to {self.happiness} in load()")
             self.energy = defaults["energy"]
             print(f"[DEBUG] energy set to {self.energy} in load()")
             self.health = defaults["health"]
+            self.cleanliness = defaults["cleanliness"]
             self.is_alive = defaults["is_alive"]
             self.last_update = defaults["last_update"]
+            self.state = self.STATE_OK
+            self.life_stage = self.STAGE_EGG
+            self.birth_time = time.time()
             return
 
         try:
@@ -302,10 +327,21 @@ class Pet:
                 data = json.load(f)
         except (json.JSONDecodeError, OSError) as e:
             print(f"Warning: failed to read save file '{SAVE_FILE}': {e}")
-            # fallback to defaults
-            data = defaults
+            # Always start from EGG if save is corrupt
+            self.hunger = defaults["hunger"]
+            self.happiness = defaults["happiness"]
+            print(f"[DEBUG] happiness set to {self.happiness} in load() (corrupt)")
+            self.energy = defaults["energy"]
+            print(f"[DEBUG] energy set to {self.energy} in load() (corrupt)")
+            self.health = defaults["health"]
+            self.cleanliness = defaults["cleanliness"]
+            self.is_alive = defaults["is_alive"]
+            self.last_update = defaults["last_update"]
+            self.state = self.STATE_OK
+            self.life_stage = self.STAGE_EGG
+            self.birth_time = time.time()
+            return
 
-        # Validate and apply keys, falling back to defaults when missing or invalid
         def get_num(key):
             v = data.get(key, defaults[key])
             try:
@@ -322,31 +358,25 @@ class Pet:
         self.cleanliness = get_num("cleanliness")
         self.is_alive = bool(data.get("is_alive", defaults["is_alive"]))
         self.last_update = float(data.get("last_update", defaults["last_update"]))
-        # If saved last_update is in the future (clock skew), clamp to now so
-        # subsequent 'missed' detection and catch-up math are reasonable.
+        self.state = data.get("state", defaults["state"])
+        self.life_stage = data.get("life_stage", defaults["life_stage"])
+        self.birth_time = float(data.get("birth_time", defaults["birth_time"]))
         now = time.time()
         if self.last_update > now:
             self.last_update = now
-        # Persisted per-need last-notified timestamps so we don't re-notify after restart
         self.notified_needs = data.get("notified_needs", {}) if isinstance(data.get("notified_needs", {}), dict) else {}
-        # Backwards-compat: older saves stored the *expiry* timestamp (now + cooldown).
         for k, v in list(self.notified_needs.items()):
             try:
                 fv = float(v)
             except Exception:
                 fv = 0.0
             if fv > now:
-                # If a stored timestamp is somehow in the future (corrupt or from the
-                # previous expiry-based scheme), clamp it to 0 so we can re-evaluate
-                # needs naturally in this session.
                 self.notified_needs[k] = 0.0
             else:
                 self.notified_needs[k] = fv
-        # Trigger immediate update to account for elapsed real time
         try:
             self.update()
         except Exception as e:
-            # Prevent corrupt save data from crashing the app
             print(f"Warning: failed to update pet after loading: {e}")
 
 class SoundManager:
@@ -1314,6 +1344,23 @@ class GameEngine:
             pygame.draw.circle(self.screen, (100, 100, 100), center, 50)
             txt = self.font.render("RIP", True, (0, 0, 0))
             self.screen.blit(txt, (center[0] - 15, center[1] - 10))
+        elif self.pet.life_stage == self.pet.STAGE_EGG:
+            # Draw a simple egg (oval with a crack)
+            egg_color = (240, 240, 220)
+            egg_rect = pygame.Rect(center[0] - 40, center[1] - 60, 80, 120)
+            pygame.draw.ellipse(self.screen, egg_color, egg_rect)
+            # Draw a crack (zigzag line)
+            crack_color = (180, 180, 160)
+            points = [
+                (center[0], center[1] - 20),
+                (center[0] - 10, center[1]),
+                (center[0] + 10, center[1] + 10),
+                (center[0] - 10, center[1] + 30),
+                (center[0] + 10, center[1] + 40),
+            ]
+            pygame.draw.lines(self.screen, crack_color, False, points, 3)
+            msg = self.font.render("Hatching soon!", True, (80, 80, 80))
+            self.screen.blit(msg, (center[0] - msg.get_width() // 2, center[1] + 70))
         else:
             color = COLOR_HEALTH if self.pet.state == "HAPPY" else (255, 165, 0)
             if self.pet.state == "SICK": color = (200, 0, 0)
