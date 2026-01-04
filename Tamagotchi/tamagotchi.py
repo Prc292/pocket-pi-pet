@@ -67,7 +67,7 @@ class DatabaseManager:
 
 # --- 2. FINITE STATE MACHINE ---
 class PetState(Enum):
-    """Enforces valid states and prevents 'illegal' transitions.[1, 2]"""
+    """Enforces valid states and prevents 'illegal' transitions."""
     EGG = auto()
     BABY = auto()
     IDLE = auto()
@@ -77,7 +77,7 @@ class PetState(Enum):
 
 @dataclass
 class PetStats:
-    hunger: float = 50.0
+    hunger: float = 50.0  # 0 = Full, 100 = Starving
     happiness: float = 100.0
     energy: float = 100.0
     health: float = 100.0
@@ -99,7 +99,7 @@ class PetStats:
 
         self.happiness = self.clamp(self.happiness - (6.0 / 3600.0) * dt)
 
-        # Health logic: decay if basic needs aren't met
+        # Health logic: decay if needs are not met
         if self.hunger > 80 or self.energy < 10:
             self.health = self.clamp(self.health - (15.0 / 3600.0) * dt)
         elif self.hunger < 50:
@@ -130,7 +130,7 @@ class Pet:
         self.last_update = now
         self.state_timer += 0.05 
 
-        # Egg Hatching Logic
+        # Stage Check: Hatching
         if self.state == PetState.EGG:
             if now - self.birth_time > 15:
                 self.transition_to(PetState.IDLE)
@@ -147,22 +147,23 @@ class Pet:
         """Procedural drawing system using math for state-based animations."""
         t = self.state_timer
         
+        # 1. State-Specific Motion Logic
         if self.state == PetState.SLEEPING:
-            bob = 5 * math.sin(t * 1.5)  # Slow rhythmic breathing
+            bob = 5 * math.sin(t * 1.5)  # Slow breathing
             eye_closed = True
         elif self.state == PetState.DEAD:
             pygame.draw.circle(screen, (80, 80, 80), (cx, cy), 45)
             return
         else:
             bob = 10 * abs(math.sin(t * 4)) # Active bouncing
-            eye_closed = (pygame.time.get_ticks() // 100) % 30 == 0 # Random blink
+            eye_closed = (pygame.time.get_ticks() // 100) % 30 == 0 # Natural blinking
 
-        # Body with Squash and Stretch
+        # 2. Body Drawing with Squash & Stretch
         body_width = 45 + (2 * math.sin(t * 4))
         body_height = 45 - (2 * math.sin(t * 4))
         pygame.draw.ellipse(screen, COLOR_PET_BODY, (cx - body_width, cy + bob - body_height, body_width*2, body_height*2))
         
-        # Eyes
+        # 3. Draw Eyes
         eye_y = cy + bob - 10
         if eye_closed or self.state == PetState.SLEEPING:
             pygame.draw.line(screen, COLOR_PET_EYES, (cx-15, eye_y), (cx-5, eye_y), 2)
@@ -171,23 +172,18 @@ class Pet:
             pygame.draw.circle(screen, COLOR_PET_EYES, (cx-12, eye_y), 4)
             pygame.draw.circle(screen, COLOR_PET_EYES, (cx+12, eye_y), 4)
 
-        # Mouth based on mood
+        # 4. Draw Mouth (Mood-based)
         mouth_y = cy + bob + 12
         if self.state == PetState.EATING:
-            # Open animated mouth when eating
             mouth_size = 6 + (4 * math.sin(t * 10))
             pygame.draw.circle(screen, (0, 0, 0), (cx, mouth_y), mouth_size)
         else:
-            # Mood-based mouth: frown if unhappy, neutral if okay, smile if happy
-            happiness = getattr(self.stats, 'happiness', 50)
+            happiness = self.stats.happiness
             if happiness > 70:
-                # Smile
                 pygame.draw.arc(screen, (0, 0, 0), (cx-10, mouth_y-5, 20, 10), math.pi, 2*math.pi, 2)
             elif happiness < 30:
-                # Frown
                 pygame.draw.arc(screen, (0, 0, 0), (cx-10, mouth_y, 20, 10), 0, math.pi, 2)
             else:
-                # Neutral line
                 pygame.draw.line(screen, (0, 0, 0), (cx-10, mouth_y+2), (cx+10, mouth_y+2), 2)
 
     def save(self):
@@ -202,7 +198,7 @@ class Pet:
     def load(self):
         row = self.db.load_pet()
         if row:
-            # Correct mapping based on DB schema
+            # Map columns correctly (indices 1-9)
             self.stats.hunger = row[1]
             self.stats.happiness = row[2]
             self.stats.energy = row[3]
@@ -213,7 +209,7 @@ class Pet:
             self.life_stage = row[8]
             self.state = PetState[row[9]]
             
-            # Calculate Offline Progress Catch-up 
+            # Offline Catch-up Logic
             offline_dt = time.time() - row[7]
             self.stats.tick(offline_dt, self.state)
             self.last_update = time.time()
@@ -259,6 +255,7 @@ class GameEngine:
                     elif self.btn_play.collidepoint(event.pos) and self.pet.is_alive:
                         self.pet.stats.happiness = self.pet.stats.clamp(self.pet.stats.happiness + 20)
                         self.pet.stats.energy = self.pet.stats.clamp(self.pet.stats.energy - 10)
+                        self.pet.stats.hunger = self.pet.stats.clamp(self.pet.stats.hunger + 5.0)
                     elif self.btn_sleep.collidepoint(event.pos) and self.pet.is_alive:
                         new_state = PetState.IDLE if self.pet.state == PetState.SLEEPING else PetState.SLEEPING
                         self.pet.transition_to(new_state)
@@ -285,10 +282,10 @@ class GameEngine:
 
             # Dynamic Buttons
             buttons = [
-                (self.btn_feed, "Feed"),
-                (self.btn_play, "Play"),
-                (self.btn_sleep, "Sleep"),
-                (self.btn_quit, "Quit")
+                (self.btn_feed, "FEED"),
+                (self.btn_play, "PLAY"),
+                (self.btn_sleep, "SLEEP" if self.pet.state != PetState.SLEEPING else "WAKE"),
+                (self.btn_quit, "QUIT")
             ]
             for rect, txt in buttons:
                 pygame.draw.rect(self.screen, (100, 100, 100), rect, border_radius=8)
