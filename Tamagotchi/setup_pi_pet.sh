@@ -33,11 +33,12 @@ fi
 
 # 4. Set executable permissions for the main script
 echo "4. Setting executable permission for main.py..."
+cd ~/pocket-pi-pet/Tamagotchi
 chmod +x main.py
 
 echo "--- SETUP COMPLETE ---"
 echo "The game is installed in: ~/pocket-pi-pet"
 echo ""
 echo "TO RUN THE GAME:"
-echo "cd ~/pocket-pi-pet"
+echo "cd ~/pocket-pi-pet/Tamagotchi"
 echo "python3 main.py"
