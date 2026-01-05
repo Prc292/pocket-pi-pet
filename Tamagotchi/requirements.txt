@@ -1,9 +1,0 @@
-# For touchscreen cursor hiding (if not using pygame's set_visible):
-# Install unclutter-fixes (not unclutter):
-#   sudo apt-get install unclutter-fixes
-# Add this to your ~/.xinitrc to start unclutter-fixes:
-#   unclutter --timeout 0 &
-# Mouse cursor is now hidden via pygame.mouse.set_visible(False)
-# For pygame X11 support (system package, not pip):
-# sudo apt-get install x11-xserver-utils xorg
-pygame>=2.6.1
