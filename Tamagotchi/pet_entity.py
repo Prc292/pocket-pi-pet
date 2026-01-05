@@ -6,8 +6,8 @@ from models import PetState, PetStats
 from constants import COLOR_PET_BODY, COLOR_PET_EYES, COLOR_HEALTH, COLOR_TEXT, COLOR_SICK, TIME_SCALE_FACTOR 
 
 # --- RAPID TESTING EVOLUTION TIMES ---
-TIME_TO_BABY_SEC = 60.0
-TIME_TO_CHILD_SEC = 120.0
+TIME_TO_BABY_SEC = 86400.0
+TIME_TO_CHILD_SEC = 172800.0
 
 class Pet:
     # ------------------------------------------------------------------
