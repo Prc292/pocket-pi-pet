@@ -2,11 +2,13 @@ import sqlite3
 import time
 
 class DatabaseManager:
+    """Handles SQL persistence to keep the pet 'alive' on disk."""
     def __init__(self, db_path):
         self.conn = sqlite3.connect(db_path)
         self.create_tables()
 
     def create_tables(self):
+        """Creates the 12-column schema."""
         query = """
         CREATE TABLE IF NOT EXISTS pet_stats (
             id INTEGER PRIMARY KEY,

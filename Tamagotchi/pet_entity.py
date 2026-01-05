@@ -5,6 +5,7 @@ from models import PetState, PetStats
 from constants import *
 
 class Pet:
+    """Manages evolution paths and procedural visuals."""
     def __init__(self, db_manager):
         self.db = db_manager
         self.stats = PetStats()
@@ -28,6 +29,7 @@ class Pet:
         self.last_update = now
         self.state_timer += 0.05 
 
+        # Evolution Logic: EGG -> BABY -> Branching
         if self.state == PetState.EGG and (now - self.birth_time > 15):
             self.life_stage = "BABY"
             self.transition_to(PetState.IDLE)
@@ -35,6 +37,7 @@ class Pet:
             self.life_stage = "ELITE-CHILD" if self.stats.care_mistakes == 0 else "NEEDY-CHILD"
             self.transition_to(PetState.IDLE)
 
+        # Mistake Tracking [8]
         if self.stats.fullness < 10 or self.stats.energy < 10:
             self.mistake_counter_timer += dt
             if self.mistake_counter_timer > 30: 
@@ -49,6 +52,7 @@ class Pet:
             self.is_alive = False
 
     def draw(self, screen, cx, cy):
+        """Procedural animation based on trig waves."""
         t = self.state_timer
         body_color = COLOR_SICK if self.stats.care_mistakes > 2 else COLOR_PET_BODY
         
@@ -90,17 +94,18 @@ class Pet:
     def load(self):
         row = self.db.load_pet()
         if row:
-            self.stats.fullness, self.stats.happiness = row[1], row[2]
-            self.stats.energy, self.stats.health = row[3], row[4]
-            self.stats.discipline, self.stats.care_mistakes = row[5], row[6]
-            self.is_alive, self.birth_time = bool(row[7]), row[8]
+            # Fixed Index Alignment (0-11)
+            self.stats.fullness = row[1]
+            self.stats.happiness = row[2]
+            self.stats.energy = row[3]
+            self.stats.health = row[4]
+            self.stats.discipline = row[5]
+            self.stats.care_mistakes = row[6]
+            self.is_alive = bool(row[7])
+            self.birth_time = row[8]
             self.life_stage = row[9]
             self.state = PetState[row[10]]
-            # Offline Catch-up uses index 9 for the REAL timestamp
-            try:
-                last_time = float(row[11])
-            except (ValueError, TypeError):
-                last_time = time.time()
-            offline_dt = time.time() - last_time
+            # Offline Catch-up Logic
+            offline_dt = time.time() - row[11]
             self.stats.tick(offline_dt, self.state)
             self.last_update = time.time()

@@ -7,6 +7,7 @@ from database import DatabaseManager
 from pet_entity import Pet
 
 class GameEngine:
+    """Orchestrates the MVC relationship."""
     def __init__(self):
         pygame.init()
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SCALED | pygame.RESIZABLE)
@@ -15,6 +16,7 @@ class GameEngine:
         self.pet = Pet(self.db)
         self.pet.load()
 
+        # UI Hitboxes
         self.btn_feed = pygame.Rect(10, 250, 90, 40)
         self.btn_play = pygame.Rect(105, 250, 90, 40)
         self.btn_train = pygame.Rect(200, 250, 90, 40)
@@ -64,6 +66,7 @@ class GameEngine:
             stage_txt = self.font.render(f"STAGE: {self.pet.life_stage} (Mistakes: {self.pet.stats.care_mistakes})", True, COLOR_TEXT)
             self.screen.blit(stage_txt, (SCREEN_WIDTH//2 - stage_txt.get_width()//2, 210))
 
+            # Dynamic UI Layout
             buttons = [
                 (self.btn_feed, "FEED"),
                 (self.btn_play, "PLAY"),

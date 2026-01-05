@@ -1,15 +1,8 @@
-import os
-
 # --- GLOBAL CONFIGURATION ---
 SCREEN_WIDTH = 480
 SCREEN_HEIGHT = 320
 FPS = 30
-
-
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.path.join(ROOT_DIR, "data")
-os.makedirs(DATA_DIR, exist_ok=True)
-DB_FILE = os.path.join(DATA_DIR, "pet_life.db")
+DB_FILE = "pet_life.db"
 
 # --- RETRO UI PALETTE ---
 COLOR_BG = (40, 44, 52)
