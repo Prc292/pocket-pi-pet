@@ -7,14 +7,21 @@ from database import DatabaseManager
 from pet_entity import Pet
 from minigames import bouncing_pet_game
 import time
+import datetime
 
+
+# --- Day/Night Cycle Colors ---
+COLOR_DAY_BG = (135, 206, 235)  # Sky Blue
+COLOR_DUSK_BG = (255, 160, 122) # Light Salmon
+COLOR_NIGHT_BG = (25, 25, 112)  # Midnight Blue
+COLOR_DAWN_BG = (255, 223, 186) # Peach Puff
 
 
 class GameEngine:
     """Orchestrates the MVC relationship."""
     def __init__(self):
         pygame.init()
-        pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
+        pygame.mixer.init()
 
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SCALED | pygame.RESIZABLE)
         
@@ -146,6 +153,17 @@ class GameEngine:
             # Delta time in seconds (where the original error occurred)
             dt = self.clock.tick(FPS) / 1000.0 
 
+            # --- Day/Night Cycle ---
+            current_hour = datetime.datetime.now().hour
+            if 6 <= current_hour < 12:
+                current_bg_color = COLOR_DAY_BG # Morning/Day
+            elif 12 <= current_hour < 18:
+                current_bg_color = COLOR_DUSK_BG # Afternoon/Dusk
+            elif 18 <= current_hour < 24:
+                current_bg_color = COLOR_NIGHT_BG # Evening/Night
+            else:
+                current_bg_color = COLOR_DAWN_BG # Late Night/Dawn
+
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
@@ -184,7 +202,7 @@ class GameEngine:
                             action()
 
             # --- UPDATE ---
-            self.pet.update(dt) 
+            self.pet.update(dt, current_hour) 
 
             if self.pet.stats.happiness > self.prev_stats.happiness: self.stat_flash_timers['happy'] = 1.5
             if self.pet.stats.fullness > self.prev_stats.fullness: self.stat_flash_timers['full'] = 1.5
@@ -200,76 +218,4 @@ class GameEngine:
             self.update_prev_stats()
 
             # --- RENDER ---
-            self.screen.fill(COLOR_BG)
-
-            # Draw Stats Bars
-            bar_y = 35
-            self.draw_bar(10, bar_y, self.pet.stats.health, COLOR_HEALTH, "HEALTH")
-            self.draw_bar(105, bar_y, self.pet.stats.fullness, COLOR_FULLNESS, "FULL")
-            self.draw_bar(200, bar_y, self.pet.stats.happiness, COLOR_HAPPY, "HAPPY")
-            self.draw_bar(295, bar_y, self.pet.stats.discipline, COLOR_SICK, "TRAIN")
-            self.draw_bar(390, bar_y, self.pet.stats.energy, COLOR_ENERGY, "NRG")
-
-            cx, cy = self.pet_center_x, self.pet_center_y
-            
-            # Draw Pet
-            self.pet.draw(self.screen, cx, cy, self.font)
-            
-            # Display Name, Life Stage, and Care Mistakes
-            name_text = self.font.render(f"NAME: {self.pet.name}", True, COLOR_TEXT)
-            self.screen.blit(name_text, (SCREEN_WIDTH//2 - name_text.get_width()//2, 100))
-            
-            stage_txt = self.font.render(
-                f"STAGE: {self.pet.life_stage.name} (Mistakes: {self.pet.stats.care_mistakes})", 
-                True, COLOR_TEXT
-            )
-            self.screen.blit(stage_txt, (SCREEN_WIDTH//2 - stage_txt.get_width()//2, 210))
-            
-            # Display current state
-            state_text_color = COLOR_TEXT
-            if self.pet.state == PetState.DEAD: state_text_color = (255, 0, 0)
-            state_txt = self.font.render(f"STATE: {self.pet.state.name}", True, state_text_color)
-            self.screen.blit(state_txt, (SCREEN_WIDTH//2 - state_txt.get_width()//2, 230))
-
-            # Dynamic UI Layout (Buttons)
-            for rect, txt, _ in self.buttons:
-                button_color = COLOR_BTN
-                
-                # Highlight active state button
-                if self.pet.state != PetState.DEAD:
-                    if txt == "SLEEP" and self.pet.state == PetState.SLEEPING:
-                        button_color = COLOR_ENERGY
-                    elif self.pet.state.name == txt:
-                         button_color = COLOR_HAPPY 
-                         
-                pygame.draw.rect(self.screen, button_color, rect, border_radius=5)
-                
-                # Draw small action timer indicator for active actions
-                if self.pet.state.name == txt and self.pet.action_timer > 0:
-                    timer_ratio = self.pet.action_timer / self.pet.action_duration
-                    indicator_width = rect.width * timer_ratio
-                    # Draw a small, bright bar at the bottom of the button
-                    pygame.draw.rect(self.screen, (255, 255, 255), (rect.x, rect.bottom - 3, indicator_width, 3))
-                
-                # Button text
-                button_text = "WAKE" if txt == "SLEEP" and self.pet.state == PetState.SLEEPING else "QUIT" if txt == "QUIT" else txt
-                text_surf = self.font.render(button_text, True, COLOR_TEXT)
-                text_rect = text_surf.get_rect(center=rect.center)
-                self.screen.blit(text_surf, text_rect)
-            
-            # Draw Status Alert/Prompt
-            if self.pet.state == PetState.SICK:
-                alert_text = self.font.render("PET IS SICK! CLICK PET TO HEAL", True, (255, 0, 0))
-                self.screen.blit(alert_text, alert_text.get_rect(center=(SCREEN_WIDTH//2, 298)))
-            elif self.pet.state == PetState.DEAD:
-                alert_text = self.font.render("GAME OVER. R.I.P.", True, (255, 0, 0))
-                self.screen.blit(alert_text, alert_text.get_rect(center=(SCREEN_WIDTH//2, 298)))
-
-
-            pygame.display.flip()
-
-        pygame.quit()
-        self.pet.save() 
-
-if __name__ == "__main__":
-    GameEngine().run()
+            self.screen.fill(current_bg_color)

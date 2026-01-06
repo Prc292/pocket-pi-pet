@@ -2,6 +2,7 @@ import time
 import math
 import pygame
 import random
+import datetime # Add this import
 from models import PetState, PetStats
 from constants import COLOR_PET_BODY, COLOR_PET_EYES, COLOR_HEALTH, COLOR_TEXT, COLOR_SICK, TIME_SCALE_FACTOR 
 
@@ -75,7 +76,7 @@ class Pet:
                 self.action_feedback_timer = 2.0
 
 
-    def update(self, dt):
+    def update(self, dt, current_hour):
         """Handles real-time stat decay, action timers, and evolution checks."""
         
         scaled_dt = dt * TIME_SCALE_FACTOR
@@ -90,7 +91,7 @@ class Pet:
                 self.handle_action_complete(self.state.name)
         
         # 2. Update Stats (Use scaled_dt for accelerated decay)
-        self.stats.tick(scaled_dt, self.state)
+        self.stats.tick(scaled_dt, self.state, current_hour)
         
         # 3. Handle Animation Timers and Feedback (Use real dt for smooth visuals)
         self.idle_bob_timer = (self.idle_bob_timer + dt) % (math.pi * 2) 

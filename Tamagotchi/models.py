@@ -57,7 +57,7 @@ class PetStats:
     def clamp(self, value):
         return max(0.0, min(100.0, value))
 
-    def tick(self, dt: float, current_state: PetState):
+    def tick(self, dt: float, current_state: PetState, current_hour: int):
         """Standardized decay logic for real-time passage."""
         
         # --- Decay Rates (per second) ---
@@ -79,12 +79,16 @@ class PetStats:
         self.happiness = self.clamp(self.happiness - happy_rate * dt)
         
         # Energy recovery vs drain
+        energy_drain_rate = ENERGY_DECAY_SEC
+        if (current_hour >= 22 or current_hour < 6) and current_state != PetState.SLEEPING:
+            energy_drain_rate *= 1.5 # 50% increased drain at night if not sleeping
+
         if current_state == PetState.SLEEPING:
             self.energy = self.clamp(self.energy + ENERGY_REGEN_SEC * dt)
         elif current_state == PetState.PLAYING or current_state == PetState.TRAINING:
-            self.energy = self.clamp(self.energy - ENERGY_DECAY_SEC * 2 * dt) # Double drain
+            self.energy = self.clamp(self.energy - energy_drain_rate * 2 * dt) # Double drain
         else:
-            self.energy = self.clamp(self.energy - ENERGY_DECAY_SEC * dt)
+            self.energy = self.clamp(self.energy - energy_drain_rate * dt)
 
         # Health decay
         if self.fullness == 0 or self.energy == 0 or current_state == PetState.SICK:

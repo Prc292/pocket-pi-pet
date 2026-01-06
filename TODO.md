@@ -32,8 +32,7 @@ This phase focuses on strengthening the existing game mechanics and making the c
 This phase will make the game feel larger and more persistent.
 
 ### 1. Implement a Day/Night Cycle
-*   **Description:** Have the game's environment visually reflect the real-world time and influence pet behavior.
-*   **Status:** Pending
+*   **Status:** Completed
 *   **Details:**
     *   **Modify `main.py`:** Get current system time in the game loop. Change `COLOR_BG` based on the hour.
     *   **Modify `pet_entity.py` (or `main.py`):** Slightly increase pet's energy decay at night if not sleeping to encourage player interaction.
