@@ -21,6 +21,7 @@ class Pet:
         self.stats = PetStats() 
         self.state = PetState.EGG
         self.life_stage = PetState.EGG
+
         self.is_alive = True
         self.birth_time = time.time() 
         self.last_update = time.time()
@@ -78,7 +79,7 @@ class Pet:
 
     def update(self, dt, current_hour):
         """Handles real-time stat decay, action timers, and evolution checks."""
-        
+
         scaled_dt = dt * TIME_SCALE_FACTOR
         
         if not self.is_alive and self.state == PetState.DEAD:
@@ -160,6 +161,7 @@ class Pet:
    
     # ------------------------------------------------------------------
     def load(self):
+
         """Fetches data from the database and initializes pet state."""
         try:
             row = self.db.load_pet() 
@@ -185,7 +187,7 @@ class Pet:
             # Adjust stats based on time passed since last save (scaled time)
             time_passed_real = time.time() - self.last_update
             time_passed_game = time_passed_real * TIME_SCALE_FACTOR
-            self.stats.tick(time_passed_game, self.state) 
+            self.stats.tick(time_passed_game, self.state, datetime.datetime.now().hour) 
 
         except Exception as e:
             print(f"Loading failed, starting fresh (Error: {e})")
@@ -236,7 +238,8 @@ class Pet:
 
     def draw(self, surface, cx, cy, font):
         """Draws the pet, applying visual modifications based on state and health."""
-        
+
+
         # 1. Determine base size and color
         radius = 15
         if self.life_stage == PetState.EGG:
@@ -291,6 +294,7 @@ class Pet:
              surface.blit(dead_text, dead_text.get_rect(center=(cx, cy)))
              return
         
+
         if self.life_stage == PetState.EGG:
             pygame.draw.ellipse(surface, (245, 245, 210), (cx - radius, cy - radius * 1.5, radius * 2, radius * 3))
             
@@ -299,11 +303,15 @@ class Pet:
             
             egg_text = font.render(f"EGG ({time_left}s)", True, COLOR_TEXT)
             surface.blit(egg_text, egg_text.get_rect(center=(cx, cy)))
-            return
+
+
+            # return # Temporarily commented out for debugging
             
         # --- Draw Active Pet Body ---
         cx, cy = cx, cy + y_offset_action 
         cx, cy_body_center, body_w, body_h = self._draw_body(surface, cx, cy, radius, pet_color, scale_x, scale_y)
+        
+
         
         # --- Draw Evolution Features ---
         if self.life_stage in [PetState.TEEN_GOOD, PetState.ADULT_GOOD]:

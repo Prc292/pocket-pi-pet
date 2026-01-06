@@ -38,6 +38,7 @@ class GameEngine:
         self.stat_flash_timers = {}
         self.prev_stats = PetStats()
         self.update_prev_stats()
+        self.game_time = datetime.datetime.now()
 
         # --- Load Sounds (with placeholders) ---
         # NOTE: You must create these .wav files in the Tamagotchi folder!
@@ -56,16 +57,17 @@ class GameEngine:
 
 
         # UI Hitboxes
-        self.pet_center_x, self.pet_center_y = SCREEN_WIDTH // 2, 160
+        self.pet_center_x, self.pet_center_y = SCREEN_WIDTH // 2, 163
         self.pet_click_area = pygame.Rect(
             self.pet_center_x - 40, self.pet_center_y - 40, 80, 80
         )
         
-        self.btn_feed = pygame.Rect(10, 250, 90, 40)
-        self.btn_play = pygame.Rect(105, 250, 90, 40)
-        self.btn_train = pygame.Rect(200, 250, 90, 40)
-        self.btn_sleep = pygame.Rect(295, 250, 90, 40)
-        self.btn_quit = pygame.Rect(390, 250, 80, 40)
+        
+        self.btn_feed = pygame.Rect(10, SCREEN_HEIGHT - 60, 90, 40)
+        self.btn_play = pygame.Rect(105, SCREEN_HEIGHT - 60, 90, 40)
+        self.btn_train = pygame.Rect(200, SCREEN_HEIGHT - 60, 90, 40)
+        self.btn_sleep = pygame.Rect(295, SCREEN_HEIGHT - 60, 90, 40)
+        self.btn_quit = pygame.Rect(390, SCREEN_HEIGHT - 60, 80, 40)
         
 
         # Button map for easy access
@@ -153,8 +155,10 @@ class GameEngine:
             # Delta time in seconds (where the original error occurred)
             dt = self.clock.tick(FPS) / 1000.0 
 
+            # Update game_time for accelerated day/night cycle
+            self.game_time += datetime.timedelta(seconds=dt * TIME_SCALE_FACTOR)
+            current_hour = self.game_time.hour
             # --- Day/Night Cycle ---
-            current_hour = datetime.datetime.now().hour
             if 6 <= current_hour < 12:
                 current_bg_color = COLOR_DAY_BG # Morning/Day
             elif 12 <= current_hour < 18:
@@ -167,6 +171,7 @@ class GameEngine:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
+                    break
                 
                 # Handle mouse clicks AND touchscreen input
                 click_pos = None
@@ -217,5 +222,34 @@ class GameEngine:
             
             self.update_prev_stats()
 
-            # --- RENDER ---
-            self.screen.fill(current_bg_color)
+            if running:
+                # --- RENDER ---
+                self.screen.fill(current_bg_color)
+
+                # Draw the pet
+                cx, cy = self.pet_center_x, self.pet_center_y
+                self.pet.draw(self.screen, cx, cy, self.font)
+
+                # Draw stat bars
+                self.draw_bar(20, 30, self.pet.stats.happiness, (255, 200, 0), "Happiness")
+                self.draw_bar(110, 30, self.pet.stats.fullness, (0, 255, 0), "Fullness")
+                self.draw_bar(200, 30, self.pet.stats.energy, (0, 0, 255), "Energy")
+                self.draw_bar(290, 30, self.pet.stats.health, (255, 0, 0), "Health")
+                self.draw_bar(380, 30, self.pet.stats.discipline, (255, 0, 255), "Discipline")
+
+                # Draw buttons
+                for rect, text, _ in self.buttons:
+                    pygame.draw.rect(self.screen, COLOR_BTN, rect, border_radius=5)
+                    text_surf = self.font.render(text, True, COLOR_TEXT)
+                    text_rect = text_surf.get_rect(center=rect.center)
+                    self.screen.blit(text_surf, text_rect)
+
+                # Update the display
+                pygame.display.flip()
+            
+if __name__ == "__main__":
+    engine = GameEngine()
+    try:
+        engine.run()
+    finally:
+        pygame.quit()
