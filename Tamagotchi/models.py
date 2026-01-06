@@ -9,6 +9,11 @@ class PetState(Enum):
     """
     EGG = auto()
     BABY = auto()
+    CHILD = auto()
+    TEEN_GOOD = auto()
+    TEEN_BAD = auto()
+    ADULT_GOOD = auto()
+    ADULT_BAD = auto()
     IDLE = auto()
     EATING = auto()
     PLAYING = auto()

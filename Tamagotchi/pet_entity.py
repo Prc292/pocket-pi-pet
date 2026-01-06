@@ -6,9 +6,10 @@ from models import PetState, PetStats
 from constants import COLOR_PET_BODY, COLOR_PET_EYES, COLOR_HEALTH, COLOR_TEXT, COLOR_SICK, TIME_SCALE_FACTOR 
 
 # --- RAPID TESTING EVOLUTION TIMES ---
-TIME_TO_BABY_SEC = 90.0
-TIME_TO_CHILD_SEC = 172800.0
-
+TIME_TO_BABY_SEC = 5.0 # 90 seconds
+TIME_TO_CHILD_SEC = 10.0 # 2 days
+TIME_TO_TEEN_SEC = 20.0 # 4 days
+TIME_TO_ADULT_SEC = 30.0 # 7 days
 class Pet:
     # ------------------------------------------------------------------
     # FIX #1: Correct __init__ signature (fixes "Pet() takes no arguments")
@@ -18,7 +19,7 @@ class Pet:
         self.db = db_manager # DatabaseManager instance
         self.stats = PetStats() 
         self.state = PetState.EGG
-        self.life_stage = "EGG" 
+        self.life_stage = PetState.EGG
         self.is_alive = True
         self.birth_time = time.time() 
         self.last_update = time.time()
@@ -130,12 +131,25 @@ class Pet:
         # Life Stage check (based on total accumulated game time)
         total_game_time = (time.time() - self.birth_time) * TIME_SCALE_FACTOR
         
-        if self.life_stage == "EGG" and total_game_time > TIME_TO_BABY_SEC:
-            self.life_stage = "BABY"
+        if self.life_stage == PetState.EGG and total_game_time > TIME_TO_BABY_SEC:
+            self.life_stage = PetState.BABY
             self.transition_to(PetState.IDLE)
-        elif self.life_stage == "BABY" and total_game_time > TIME_TO_CHILD_SEC:
-            self.life_stage = "CHILD"
+        elif self.life_stage == PetState.BABY and total_game_time > TIME_TO_CHILD_SEC:
+            self.life_stage = PetState.CHILD
             self.transition_to(PetState.IDLE)
+        elif self.life_stage == PetState.CHILD and total_game_time > TIME_TO_TEEN_SEC:
+            if self.stats.care_mistakes < 3:
+                self.life_stage = PetState.TEEN_GOOD
+            else:
+                self.life_stage = PetState.TEEN_BAD
+            self.transition_to(PetState.IDLE)
+        elif self.life_stage in [PetState.TEEN_GOOD, PetState.TEEN_BAD] and total_game_time > TIME_TO_ADULT_SEC:
+            if self.stats.care_mistakes < 5:
+                self.life_stage = PetState.ADULT_GOOD
+            else:
+                self.life_stage = PetState.ADULT_BAD
+            self.transition_to(PetState.IDLE)
+
 
         # 5. Save state every few seconds
         if time.time() - self.last_update > 5: 
@@ -162,8 +176,8 @@ class Pet:
                 self.is_alive = bool(row[7])
                 self.birth_time = row[8]
                 self.last_update = row[9]
-                self.life_stage = row[10] 
-                self.state = PetState(row[11]) 
+                self.life_stage = PetState[row[10]]
+                self.state = PetState[row[11]]
                 if len(row) > 12: 
                     self.name = row[12] 
             
@@ -176,7 +190,7 @@ class Pet:
             print(f"Loading failed, starting fresh (Error: {e})")
             self.stats = PetStats() 
             self.state = PetState.EGG
-            self.life_stage = "EGG"
+            self.life_stage = PetState.EGG
             self.birth_time = time.time()
             self.last_update = time.time()
 
@@ -191,7 +205,7 @@ class Pet:
             'care_mistakes': self.stats.care_mistakes,
             'is_alive': self.is_alive,
             'birth_time': self.birth_time,
-            'life_stage': self.life_stage,
+            'life_stage': self.life_stage.name,
             'state': self.state.name,
             'name': self.name
         }
@@ -224,12 +238,16 @@ class Pet:
         
         # 1. Determine base size and color
         radius = 15
-        if self.life_stage == "EGG":
+        if self.life_stage == PetState.EGG:
             radius = 20
-        elif self.life_stage == "BABY":
+        elif self.life_stage == PetState.BABY:
             radius = 30
-        elif self.life_stage == "CHILD":
+        elif self.life_stage == PetState.CHILD:
             radius = 40
+        elif self.life_stage in [PetState.TEEN_GOOD, PetState.TEEN_BAD]:
+            radius = 50
+        elif self.life_stage in [PetState.ADULT_GOOD, PetState.ADULT_BAD]:
+            radius = 60
             
         base_color = COLOR_PET_BODY
         # Dynamic color shift for low health
@@ -267,7 +285,7 @@ class Pet:
              surface.blit(dead_text, dead_text.get_rect(center=(cx, cy)))
              return
         
-        if self.life_stage == "EGG":
+        if self.life_stage == PetState.EGG:
             pygame.draw.ellipse(surface, (245, 245, 210), (cx - radius, cy - radius * 1.5, radius * 2, radius * 3))
             
             time_elapsed_game = (time.time() - self.birth_time) * TIME_SCALE_FACTOR
@@ -281,6 +299,15 @@ class Pet:
         cx, cy = cx, cy + y_offset_action 
         cx, cy_body_center, body_w, body_h = self._draw_body(surface, cx, cy, radius, pet_color, scale_x, scale_y)
         
+        # --- Draw Evolution Features ---
+        if self.life_stage in [PetState.TEEN_GOOD, PetState.ADULT_GOOD]:
+            # Draw a halo for "good" evolutions
+            pygame.draw.circle(surface, (255, 255, 0), (cx, cy_body_center - body_h // 2 - 10), radius // 4, 2)
+        elif self.life_stage in [PetState.TEEN_BAD, PetState.ADULT_BAD]:
+            # Draw horns for "bad" evolutions
+            pygame.draw.polygon(surface, (100, 0, 0), [(cx - radius // 2, cy_body_center - body_h // 2), (cx - radius // 4, cy_body_center - body_h), (cx, cy_body_center - body_h // 2)])
+            pygame.draw.polygon(surface, (100, 0, 0), [(cx + radius // 2, cy_body_center - body_h // 2), (cx + radius // 4, cy_body_center - body_h), (cx, cy_body_center - body_h // 2)])
+
         
         # --- Draw Face ---
         eye_y = cy_body_center - radius * scale_y // 3

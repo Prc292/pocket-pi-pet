@@ -5,6 +5,7 @@ from constants import *
 from models import PetState, PetStats
 from database import DatabaseManager
 from pet_entity import Pet
+from minigames import MiniGame
 import time
 
 
@@ -25,6 +26,8 @@ class GameEngine:
         self.pet = Pet(self.db, name="Gizmo") # Initial pet name
         self.pet.load()
 
+        self.minigame = MiniGame(self.screen)
+
         # UI Hitboxes
         self.pet_center_x, self.pet_center_y = SCREEN_WIDTH // 2, 160
         self.pet_click_area = pygame.Rect(
@@ -41,7 +44,7 @@ class GameEngine:
         # Button map for easy access
         self.buttons = [
             (self.btn_feed, "FEED", lambda: self.pet.transition_to(PetState.EATING)),
-            (self.btn_play, "PLAY", lambda: self.pet.transition_to(PetState.PLAYING)),
+            (self.btn_play, "PLAY", self.play_minigame),
             (self.btn_train, "TRAIN", lambda: self.pet.transition_to(PetState.TRAINING)),
             (self.btn_sleep, "SLEEP", self._toggle_sleep),
             (self.btn_quit, "QUIT", lambda: sys.exit())
@@ -53,6 +56,13 @@ class GameEngine:
             self.pet.transition_to(PetState.IDLE)
         else:
             self.pet.transition_to(PetState.SLEEPING)
+
+    def play_minigame(self):
+        score = self.minigame.run()
+        self.pet.stats.happiness += score
+        self.pet.stats.energy -= 5
+        self.pet.transition_to(PetState.IDLE)
+
 
     def draw_bar(self, x, y, value, color, label):
         """Draws a progress bar with value text inside the bar."""
@@ -107,9 +117,9 @@ class GameEngine:
 
                     # Check for button clicks
                     current_state = self.pet.state
-                    for rect, _, action in self.buttons:
+                    for rect, name, action in self.buttons:
                         if rect.collidepoint(click_pos):
-                            if action == self._toggle_sleep:
+                            if name == "PLAY":
                                 action()
                             elif current_state == PetState.IDLE:
                                 action()
@@ -142,7 +152,7 @@ class GameEngine:
             self.screen.blit(name_text, (SCREEN_WIDTH//2 - name_text.get_width()//2, 100))
             
             stage_txt = self.font.render(
-                f"STAGE: {self.pet.life_stage} (Mistakes: {self.pet.stats.care_mistakes})", 
+                f"STAGE: {self.pet.life_stage.name} (Mistakes: {self.pet.stats.care_mistakes})", 
                 True, COLOR_TEXT
             )
             self.screen.blit(stage_txt, (SCREEN_WIDTH//2 - stage_txt.get_width()//2, 210))
