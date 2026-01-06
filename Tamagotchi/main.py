@@ -84,20 +84,31 @@ class GameEngine:
                 if event.type == pygame.QUIT:
                     running = False
                 
-                # Input Handling
+                # Handle mouse clicks AND touchscreen input
+                click_pos = None
+
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    
+                    click_pos = event.pos
+
+                elif event.type == pygame.FINGERDOWN:
+                    win_w, win_h = self.screen.get_size()
+                    click_pos = (
+                        int(event.x * win_w),
+                        int(event.y * win_h)
+                    )
+
+                if click_pos:
                     if self.pet.state == PetState.DEAD:
                         continue
 
                     # Check for clicks on the Pet itself (for healing)
-                    if self.pet.state == PetState.SICK and self.pet_click_area.collidepoint(event.pos):
-                         self.pet.heal()
-                         
+                    if self.pet.state == PetState.SICK and self.pet_click_area.collidepoint(click_pos):
+                        self.pet.heal()
+
                     # Check for button clicks
                     current_state = self.pet.state
                     for rect, _, action in self.buttons:
-                        if rect.collidepoint(event.pos):
+                        if rect.collidepoint(click_pos):
                             if action == self._toggle_sleep:
                                 action()
                             elif current_state == PetState.IDLE:
