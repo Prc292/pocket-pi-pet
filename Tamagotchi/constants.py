@@ -1,9 +1,9 @@
 # --- GLOBAL CONFIGURATION ---
-SCREEN_WIDTH = 480
-SCREEN_HEIGHT = 320
+SCREEN_WIDTH = 960
+SCREEN_HEIGHT = 640
 FPS = 30
 DB_FILE = "pet_life.db"
-TIME_SCALE_FACTOR = 300 # 1 real second = 5 game minutes (300x speed)
+TIME_SCALE_FACTOR = 10 # 1 = real time, 10 = 10x faster!
 
 # --- RETRO UI PALETTE ---
 COLOR_BG = (40, 44, 52)
