@@ -34,6 +34,9 @@ class Pet:
         self.eye_blink_duration = 0.1
         self.eyes_open = True
         
+        # Egg cracking animation
+        self.crack_level = 0.0
+        
         # Action feedback
         self.action_timer = 0.0
         self.action_duration = 3.0
@@ -236,6 +239,35 @@ class Pet:
 
         return cx, cy, body_w, body_h
 
+    def _draw_egg_crack(self, surface, cx, cy, radius, crack_level):
+        """Draws cracks on the egg based on the crack_level."""
+        egg_color = (245, 245, 210)
+        crack_color = (100, 80, 50)
+        
+        # Base egg shape
+        egg_rect = pygame.Rect(cx - radius, cy - radius * 1.5, radius * 2, radius * 3)
+        pygame.draw.ellipse(surface, egg_color, egg_rect)
+
+        # Main crack line (grows with crack_level)
+        if crack_level > 0:
+            # Crack from top-ish to bottom-ish
+            start_x = cx + (radius * 0.2 * math.sin(crack_level * math.pi * 2))
+            start_y = cy - radius * (1.2 - crack_level * 0.5) 
+            end_x = cx + (radius * 0.3 * math.sin(crack_level * math.pi * 3 + math.pi/2))
+            end_y = cy + radius * (1.2 - (1-crack_level) * 0.5)
+            pygame.draw.line(surface, crack_color, (start_x, start_y), (end_x, end_y), 2)
+            
+            # Branches for the crack
+            if crack_level > 0.3:
+                branch1_x = start_x + (end_x - start_x) * 0.3
+                branch1_y = start_y + (end_y - start_y) * 0.3
+                pygame.draw.line(surface, crack_color, (branch1_x, branch1_y), (branch1_x - radius * 0.5 * crack_level, branch1_y - radius * 0.2 * crack_level), 2)
+            
+            if crack_level > 0.6:
+                branch2_x = start_x + (end_x - start_x) * 0.7
+                branch2_y = start_y + (end_y - start_y) * 0.7
+                pygame.draw.line(surface, crack_color, (branch2_x, branch2_y), (branch2_x + radius * 0.4 * crack_level, branch2_y - radius * 0.3 * crack_level), 2)
+        
     def draw(self, surface, cx, cy, font):
         """Draws the pet, applying visual modifications based on state and health."""
 
@@ -296,95 +328,94 @@ class Pet:
         
 
         if self.life_stage == PetState.EGG:
-            pygame.draw.ellipse(surface, (245, 245, 210), (cx - radius, cy - radius * 1.5, radius * 2, radius * 3))
-            
             time_elapsed_game = (time.time() - self.birth_time) * TIME_SCALE_FACTOR
-            time_left = max(0, int(TIME_TO_BABY_SEC - time_elapsed_game))
+            self.crack_level = min(1.0, time_elapsed_game / TIME_TO_BABY_SEC)
             
+            self._draw_egg_crack(surface, cx, cy, radius, self.crack_level)
+            
+            time_left = max(0, int(TIME_TO_BABY_SEC - time_elapsed_game))
             egg_text = font.render(f"EGG ({time_left}s)", True, COLOR_TEXT)
             surface.blit(egg_text, egg_text.get_rect(center=(cx, cy)))
-
-
-            # return # Temporarily commented out for debugging
+            return # Ensure nothing else is drawn when in EGG state
             
         # --- Draw Active Pet Body ---
-        cx, cy = cx, cy + y_offset_action 
-        cx, cy_body_center, body_w, body_h = self._draw_body(surface, cx, cy, radius, pet_color, scale_x, scale_y)
-        
-
-        
-        # --- Draw Evolution Features ---
-        if self.life_stage in [PetState.TEEN_GOOD, PetState.ADULT_GOOD]:
-            # Draw a halo for "good" evolutions
-            pygame.draw.circle(surface, (255, 255, 0), (cx, cy_body_center - body_h // 2 - 10), radius // 4, 2)
-        elif self.life_stage in [PetState.TEEN_BAD, PetState.ADULT_BAD]:
-            # Draw horns for "bad" evolutions
-            pygame.draw.polygon(surface, (100, 0, 0), [(cx - radius // 2, cy_body_center - body_h // 2), (cx - radius // 4, cy_body_center - body_h), (cx, cy_body_center - body_h // 2)])
-            pygame.draw.polygon(surface, (100, 0, 0), [(cx + radius // 2, cy_body_center - body_h // 2), (cx + radius // 4, cy_body_center - body_h), (cx, cy_body_center - body_h // 2)])
-
-        
-        # --- Draw Face ---
-        eye_y = cy_body_center - radius * scale_y // 3
-        eye_w, eye_h = radius * scale_x // 4, radius * scale_y // 3
-        
-        # Eyes
-        if self.state == PetState.SLEEPING:
-            zzz = font.render("Zzz", True, COLOR_TEXT)
-            surface.blit(zzz, zzz.get_rect(center=(cx + radius + 5, cy_body_center - radius)))
-            pygame.draw.line(surface, COLOR_PET_EYES, (cx - eye_w, eye_y), (cx - eye_w // 2, eye_y), 2)
-            pygame.draw.line(surface, COLOR_PET_EYES, (cx + eye_w // 2, eye_y), (cx + eye_w, eye_y), 2)
-        elif self.eyes_open:
-            pygame.draw.ellipse(surface, COLOR_PET_EYES, (cx - eye_w * 1.5, eye_y - eye_h // 2, eye_w, eye_h))
-            pygame.draw.ellipse(surface, COLOR_PET_EYES, (cx + eye_w * 0.5, eye_y - eye_h // 2, eye_w, eye_h))
         else:
-            pygame.draw.line(surface, COLOR_PET_EYES, (cx - eye_w * 1.5, eye_y), (cx - eye_w * 0.5, eye_y), 2)
-            pygame.draw.line(surface, COLOR_PET_EYES, (cx + eye_w * 0.5, eye_y), (cx + eye_w * 1.5, eye_y), 2)
-        
-        # --- Mouth ---
-        mouth_y = cy_body_center + radius * scale_y // 3
-        mouth_w = radius * scale_x // 3
-
-        # Eating animation overrides normal mouth
-        if self.state == PetState.EATING:
-            chew_h = (math.sin(self.action_timer * 10) + 1) * 4 # Oscillates between 0 and 8
-            mouth_rect = pygame.Rect(cx - mouth_w // 2, mouth_y, mouth_w, chew_h)
-            pygame.draw.ellipse(surface, COLOR_PET_EYES, mouth_rect)
-        # Happy/Sad mouth
-        elif self.stats.happiness > 70:
-            # Smile (arc)
-            mouth_rect = pygame.Rect(cx - mouth_w // 2, mouth_y - 5, mouth_w, 10)
-            pygame.draw.arc(surface, COLOR_PET_EYES, mouth_rect, math.pi, 2 * math.pi, 2)
-        elif self.stats.happiness < 30:
-            # Frown (arc)
-            mouth_rect = pygame.Rect(cx - mouth_w // 2, mouth_y, mouth_w, 10)
-            pygame.draw.arc(surface, COLOR_PET_EYES, mouth_rect, 0, math.pi, 2)
-        else:
-            # Neutral mouth
-            pygame.draw.line(surface, COLOR_PET_EYES, (cx - mouth_w // 2, mouth_y), (cx + mouth_w // 2, mouth_y), 2)
-
-
-        # --- State Visuals ---
-        if self.state == PetState.EATING:
-            # Food item moving towards the pet (animation)
-            food_x_start = cx + radius + 15
-            food_x_end = cx + mouth_w + 5
-            food_x = food_x_start - (food_x_start - food_x_end) * (self.action_timer / self.action_duration)
-            pygame.draw.circle(surface, (255, 0, 0), (int(food_x), cy_body_center + radius * scale_y // 3), 3) 
-        
-        if self.state == PetState.PLAYING:
-            # Bouncing hearts (animation)
-            heart_font = pygame.font.Font(None, 20)
-            heart_sym = heart_font.render("<3", True, (255, 100, 150))
+            cx, cy = cx, cy + y_offset_action 
+            cx, cy_body_center, body_w, body_h = self._draw_body(surface, cx, cy, radius, pet_color, scale_x, scale_y)
             
-            heart_y_offset = math.sin(self.play_bounce_timer * 0.5) * 5 
+            # --- Draw Evolution Features ---
+            if self.life_stage in [PetState.TEEN_GOOD, PetState.ADULT_GOOD]:
+                # Draw a halo for "good" evolutions
+                pygame.draw.circle(surface, (255, 255, 0), (cx, cy_body_center - body_h // 2 - 10), radius // 4, 2)
+            elif self.life_stage in [PetState.TEEN_BAD, PetState.ADULT_BAD]:
+                # Draw horns for "bad" evolutions
+                pygame.draw.polygon(surface, (100, 0, 0), [(cx - radius // 2, cy_body_center - body_h // 2), (cx - radius // 4, cy_body_center - body_h), (cx, cy_body_center - body_h // 2)])
+                pygame.draw.polygon(surface, (100, 0, 0), [(cx + radius // 2, cy_body_center - body_h // 2), (cx + radius // 4, cy_body_center - body_h), (cx, cy_body_center - body_h // 2)])
 
-            surface.blit(heart_sym, heart_sym.get_rect(center=(cx - radius * 1.2, cy_body_center - radius * 1.5 + heart_y_offset)))
-            surface.blit(heart_sym, heart_sym.get_rect(center=(cx + radius * 1.2, cy_body_center - radius * 1.5 - heart_y_offset)))
-        
-        if self.state == PetState.SICK:
-            skull_font = pygame.font.Font(None, 40)
-            sick_sym = skull_font.render("X", True, COLOR_SICK)
-            surface.blit(sick_sym, sick_sym.get_rect(center=(cx, cy_body_center - body_h * 0.75)))
+            
+            # --- Draw Face ---
+            eye_y = cy_body_center - radius * scale_y // 3
+            eye_w, eye_h = radius * scale_x // 4, radius * scale_y // 3
+            
+            # Eyes
+            if self.state == PetState.SLEEPING:
+                zzz = font.render("Zzz", True, COLOR_TEXT)
+                surface.blit(zzz, zzz.get_rect(center=(cx + radius + 5, cy_body_center - radius)))
+                pygame.draw.line(surface, COLOR_PET_EYES, (cx - eye_w, eye_y), (cx - eye_w // 2, eye_y), 2)
+                pygame.draw.line(surface, COLOR_PET_EYES, (cx + eye_w // 2, eye_y), (cx + eye_w, eye_y), 2)
+            elif self.eyes_open:
+                pygame.draw.ellipse(surface, COLOR_PET_EYES, (cx - eye_w * 1.5, eye_y - eye_h // 2, eye_w, eye_h))
+                pygame.draw.ellipse(surface, COLOR_PET_EYES, (cx + eye_w * 0.5, eye_y - eye_h // 2, eye_w, eye_h))
+            else:
+                pygame.draw.line(surface, COLOR_PET_EYES, (cx - eye_w * 1.5, eye_y), (cx - eye_w * 0.5, eye_y), 2)
+                pygame.draw.line(surface, COLOR_PET_EYES, (cx + eye_w * 0.5, eye_y), (cx + eye_w * 1.5, eye_y), 2)
+            
+            # --- Mouth ---
+            mouth_y = cy_body_center + radius * scale_y // 3
+            mouth_w = radius * scale_x // 3
+
+            # Eating animation overrides normal mouth
+            if self.state == PetState.EATING:
+                chew_h = (math.sin(self.action_timer * 10) + 1) * 4 # Oscillates between 0 and 8
+                mouth_rect = pygame.Rect(cx - mouth_w // 2, mouth_y, mouth_w, chew_h)
+                pygame.draw.ellipse(surface, COLOR_PET_EYES, mouth_rect)
+            # Happy/Sad mouth
+            elif self.stats.happiness > 70:
+                # Smile (arc)
+                mouth_rect = pygame.Rect(cx - mouth_w // 2, mouth_y - 5, mouth_w, 10)
+                pygame.draw.arc(surface, COLOR_PET_EYES, mouth_rect, math.pi, 2 * math.pi, 2)
+            elif self.stats.happiness < 30:
+                # Frown (arc)
+                mouth_rect = pygame.Rect(cx - mouth_w // 2, mouth_y, mouth_w, 10)
+                pygame.draw.arc(surface, COLOR_PET_EYES, mouth_rect, 0, math.pi, 2)
+            else:
+                # Neutral mouth
+                pygame.draw.line(surface, COLOR_PET_EYES, (cx - mouth_w // 2, mouth_y), (cx + mouth_w // 2, mouth_y), 2)
+
+
+            # --- State Visuals ---
+            if self.state == PetState.EATING:
+                # Food item moving towards the pet (animation)
+                food_x_start = cx + radius + 15
+                food_x_end = cx + mouth_w + 5
+                food_x = food_x_start - (food_x_start - food_x_end) * (self.action_timer / self.action_duration)
+                pygame.draw.circle(surface, (255, 0, 0), (int(food_x), cy_body_center + radius * scale_y // 3), 3) 
+            
+            if self.state == PetState.PLAYING:
+                # Bouncing hearts (animation)
+                heart_font = pygame.font.Font(None, 20)
+                heart_sym = heart_font.render("<3", True, (255, 100, 150))
+                
+                heart_y_offset = math.sin(self.play_bounce_timer * 0.5) * 5 
+
+                surface.blit(heart_sym, heart_sym.get_rect(center=(cx - radius * 1.2, cy_body_center - radius * 1.5 + heart_y_offset)))
+                surface.blit(heart_sym, heart_sym.get_rect(center=(cx + radius * 1.2, cy_body_center - radius * 1.5 - heart_y_offset)))
+            
+            if self.state == PetState.SICK:
+                skull_font = pygame.font.Font(None, 40)
+                sick_sym = skull_font.render("X", True, COLOR_SICK)
+                surface.blit(sick_sym, sick_sym.get_rect(center=(cx, cy_body_center - body_h * 0.75)))
+
 
         # --- Action Feedback Overlay ---
         if self.action_feedback_timer > 0:
