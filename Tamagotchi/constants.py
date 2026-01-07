@@ -1,6 +1,6 @@
 # --- GLOBAL CONFIGURATION ---
-SCREEN_WIDTH = 960
-SCREEN_HEIGHT = 640
+SCREEN_WIDTH = 480          
+SCREEN_HEIGHT = 320
 FPS = 30
 DB_FILE = "pet_life.db"
 TIME_SCALE_FACTOR = 10 # 1 = real time, 10 = 10x faster!
