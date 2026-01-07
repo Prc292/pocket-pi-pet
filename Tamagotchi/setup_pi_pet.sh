@@ -39,8 +39,7 @@ echo "4. Creating Python virtual environment..."
 python3 -m venv "$VENV_DIR"
 source "$VENV_DIR/bin/activate"
 pip install --upgrade pip
-echo "pygame==2.5.2" > requirements.txt
-pip install -r requirements.txt
+pip install -r Tamagotchi/requirements.txt
 
 # 5. Set executable permissions
 echo "5. Setting executable permissions for main.py..."
