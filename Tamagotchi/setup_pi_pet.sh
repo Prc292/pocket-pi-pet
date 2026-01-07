@@ -17,10 +17,7 @@ sudo apt upgrade -y
 # 2. Install required system libraries and SDL2 runtime/development packages
 echo "2. Installing required system libraries..."
 sudo apt install -y python3 python3-pip python3-venv python3-dev python3-setuptools \
-    libsdl2-2.0-0 libsdl2-image-2.0-0 libsdl2-mixer-2.0-0 libsdl2-ttf-2.0-0 \
-    libdrm-dev libgbm-dev libmtdev-dev libudev-dev libevdev-dev \
-    libegl-mesa0 mesa-utils mesa-utils-extra \
-    git sqlite3
+    git 
 
 # 3. Clone or update the repository
 echo "3. Cloning or updating the repository..."
