@@ -13,9 +13,9 @@ Group=pi
 Environment=SDL_VIDEODRIVER=kmsdrm
 Environment=SDL_AUDIODRIVER=alsa
 
-# Working directory should be the project root containing tamagotchi.py
-WorkingDirectory=/home/pi/pocket-pi-pet
-ExecStart=/home/pi/pocket-pi-pet/.venv/bin/python3 /home/pi/pocket-pi-pet/tamagotchi.py
+# Working directory should be the project root containing main.py
+WorkingDirectory=/home/pi/pipet
+ExecStart=/home/pi/pipet/venv/bin/python3 /home/pi/pipet/Tamagotchi/main.py
 Restart=on-failure
 RestartSec=5
 

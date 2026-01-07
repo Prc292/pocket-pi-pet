@@ -3,9 +3,9 @@
 # --- Full setup script for Pocket Pi Pet on Raspberry Pi OS Lite ---
 set -e
 
-REPO_URL="https://github.com/Prc292/pocket-pi-pet.git"
-CLONE_DIR="pocket-pi-pet"
-VENV_DIR="$HOME/tamago-venv"
+REPO_URL="https://github.com/Prc292/pipet.git"
+CLONE_DIR="pipet"
+VENV_DIR="$HOME/$CLONE_DIR/venv"
 
 echo "--- STARTING AUTOMATED SETUP for $CLONE_DIR ---"
 
@@ -22,15 +22,8 @@ sudo apt install -y python3 python3-pip python3-venv python3-dev python3-setupto
     libegl-mesa0 libgles2-mesa0 mesa-utils mesa-utils-extra \
     libjpeg62-turbo libpng16-16 libportmidi0 git sqlite3
 
-# 3. Create Python virtual environment
-echo "3. Creating Python virtual environment..."
-python3 -m venv "$VENV_DIR"
-source "$VENV_DIR/bin/activate"
-pip install --upgrade pip
-pip install pygame
-
-# 4. Clone or update the repository
-echo "4. Cloning or updating the repository..."
+# 3. Clone or update the repository
+echo "3. Cloning or updating the repository..."
 cd ~
 if [ -d "$CLONE_DIR" ]; then
     echo "Directory '$CLONE_DIR' exists, pulling latest changes..."
@@ -41,14 +34,22 @@ else
     cd "$CLONE_DIR"
 fi
 
+# 4. Create Python virtual environment and install dependencies
+echo "4. Creating Python virtual environment..."
+python3 -m venv "$VENV_DIR"
+source "$VENV_DIR/bin/activate"
+pip install --upgrade pip
+echo "pygame==2.5.2" > requirements.txt
+pip install -r requirements.txt
+
 # 5. Set executable permissions
 echo "5. Setting executable permissions for main.py..."
-cd ~/pocket-pi-pet/Tamagotchi
+cd Tamagotchi
 chmod +x main.py
 
 echo "--- SETUP COMPLETE ---"
-echo "The game is installed in: ~/pocket-pi-pet"
+echo "The game is installed in: ~/$CLONE_DIR"
 echo ""
 echo "TO RUN THE GAME:"
-echo "  source ~/tamago-venv/bin/activate"
-echo "  python3 ~/pocket-pi-pet/Tamagotchi/main.py"
+echo "  source ~/$CLONE_DIR/venv/bin/activate"
+echo "  python3 ~/$CLONE_DIR/Tamagotchi/main.py"
