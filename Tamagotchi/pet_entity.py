@@ -6,11 +6,11 @@ import datetime # Add this import
 from models import PetState, PetStats
 from constants import COLOR_PET_BODY, COLOR_PET_EYES, COLOR_HEALTH, COLOR_TEXT, COLOR_SICK, TIME_SCALE_FACTOR 
 
-# --- RAPID TESTING EVOLUTION TIMES ---
-TIME_TO_BABY_SEC = 5.0 # 90 seconds
-TIME_TO_CHILD_SEC = 10.0 # 2 days
-TIME_TO_TEEN_SEC = 20.0 # 4 days
-TIME_TO_ADULT_SEC = 30.0 # 7 days
+# --- EVOLUTION TIMES (in real seconds, scaled by TIME_SCALE_FACTOR) ---
+TIME_TO_BABY_SEC = 60.0  # 90 game-seconds (90 / 10)
+TIME_TO_CHILD_SEC = 17280.0 # 2 game-days (2 * 24 * 60 * 60 / 10)
+TIME_TO_TEEN_SEC = 34560.0 # 4 game-days (4 * 24 * 60 * 60 / 10)
+TIME_TO_ADULT_SEC = 60480.0 # 7 game-days (7 * 24 * 60 * 60 / 10)
 class Pet:
     # ------------------------------------------------------------------
     # FIX #1: Correct __init__ signature (fixes "Pet() takes no arguments")
