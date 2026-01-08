@@ -62,7 +62,8 @@ fi
 
 echo ""
 echo "======================================================"
-echo "Setup complete! "NOTE: Reboot is required for config.txt changes to take effect."
+echo "Setup complete! NOTE: Reboot is required for config.txt changes to take effect."
+echo ""
 echo "after reboot, run the following commands to start the game:"
 echo "source ~/pipet/venv/bin/activate"
 echo "python3 ~/pipet/Tamagotchi/main.py"
@@ -97,5 +98,5 @@ echo ""
 |                                              |
 |                                              |
 |                                              |
-'=============================================='
+'=============================================='"
 echo "======================================================"
