@@ -4,6 +4,15 @@ SCREEN_HEIGHT = 320
 FPS = 30
 DB_FILE = "pet_life.db"
 TIME_SCALE_FACTOR = 1 # 1 = real time, 10 = 10x faster!
+POINTS_PER_WIN = 10
+
+# --- SHOP ---
+SHOP_ITEMS = {
+    'Standard Meal': 10,
+    'Candy': 5,
+    'Energy Drink': 15,
+    'Medicine': 20,
+}
 
 # --- RETRO UI PALETTE ---
 COLOR_BG = (40, 44, 52)

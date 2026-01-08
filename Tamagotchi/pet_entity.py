@@ -185,7 +185,9 @@ class Pet:
                 self.life_stage = PetState[row[10]]
                 self.state = PetState[row[11]]
                 if len(row) > 12: 
-                    self.name = row[12] 
+                    self.name = row[12]
+                if len(row) > 13:
+                    self.stats.points = row[13]
             
             # Adjust stats based on time passed since last save (scaled time)
             time_passed_real = time.time() - self.last_update
@@ -213,7 +215,8 @@ class Pet:
             'birth_time': self.birth_time,
             'life_stage': self.life_stage.name,
             'state': self.state.name,
-            'name': self.name
+            'name': self.name,
+            'points': self.stats.points
         }
         self.db.save_pet(pet_data)
     

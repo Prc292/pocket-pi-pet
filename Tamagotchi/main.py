@@ -2,7 +2,7 @@ import os
 import sys
 import pygame
 from constants import *
-from models import PetState, PetStats
+from models import GameState, PetState, PetStats
 from database import DatabaseManager
 from pet_entity import Pet
 from minigames import bouncing_pet_game
@@ -39,6 +39,7 @@ class GameEngine:
         self.prev_stats = PetStats()
         self.update_prev_stats()
         self.game_time = datetime.datetime.now()
+        self.game_state = GameState.PET_VIEW
 
         # --- Load Sounds (with placeholders) ---
         # NOTE: You must create these .wav files in the Tamagotchi folder!
@@ -63,11 +64,12 @@ class GameEngine:
         )
         
         
-        self.btn_feed = pygame.Rect(10, SCREEN_HEIGHT - 60, 90, 40)
-        self.btn_play = pygame.Rect(105, SCREEN_HEIGHT - 60, 90, 40)
-        self.btn_train = pygame.Rect(200, SCREEN_HEIGHT - 60, 90, 40)
-        self.btn_sleep = pygame.Rect(295, SCREEN_HEIGHT - 60, 90, 40)
-        self.btn_quit = pygame.Rect(390, SCREEN_HEIGHT - 60, 80, 40)
+        self.btn_feed = pygame.Rect(10, SCREEN_HEIGHT - 60, 70, 40)
+        self.btn_play = pygame.Rect(85, SCREEN_HEIGHT - 60, 70, 40)
+        self.btn_train = pygame.Rect(160, SCREEN_HEIGHT - 60, 70, 40)
+        self.btn_sleep = pygame.Rect(235, SCREEN_HEIGHT - 60, 70, 40)
+        self.btn_shop = pygame.Rect(310, SCREEN_HEIGHT - 60, 70, 40)
+        self.btn_quit = pygame.Rect(385, SCREEN_HEIGHT - 60, 85, 40)
         
 
         # Button map for easy access
@@ -76,14 +78,19 @@ class GameEngine:
             (self.btn_play, "PLAY", self.handle_play),
             (self.btn_train, "TRAIN", self.handle_train),
             (self.btn_sleep, "SLEEP", self._toggle_sleep),
+            (self.btn_shop, "SHOP", self.handle_shop),
             (self.btn_quit, "QUIT", lambda: sys.exit())
         ]
+        self.inventory_buttons = []
+        self.shop_buttons = []
 
     # --- Action Handlers with Sound ---
     def handle_feed(self):
         if self.pet.state == PetState.IDLE:
-            if self.sound_eat: self.sound_eat.play()
-            self.pet.transition_to(PetState.EATING)
+            self.game_state = GameState.INVENTORY_VIEW
+
+    def handle_shop(self):
+        self.game_state = GameState.SHOP_VIEW
 
     def handle_play(self):
         if self.pet.state == PetState.IDLE:
@@ -112,7 +119,8 @@ class GameEngine:
         score = bouncing_pet_game(self.screen, self.font)
         self.pet.stats.happiness = self.pet.stats.clamp(self.pet.stats.happiness + score)
         self.pet.stats.energy = self.pet.stats.clamp(self.pet.stats.energy - 10)
-        self.pet.action_feedback_text = f"+{score} HAPPY!"
+        self.pet.stats.points += score // 10
+        self.pet.action_feedback_text = f"+{score} HAPPY! +{score//10} PTS"
         self.pet.action_feedback_timer = 2.0
         self.pet.transition_to(PetState.IDLE)
 
@@ -148,105 +156,166 @@ class GameEngine:
         self.screen.blit(val_txt, (x + bar_width // 2 - val_txt.get_width() // 2, y + bar_height // 2 - val_txt.get_height() // 2))
 
 
+    def draw_inventory(self):
+        self.screen.fill(COLOR_BG)
+        title_surf = self.font.render("Inventory", True, COLOR_TEXT)
+        self.screen.blit(title_surf, (SCREEN_WIDTH // 2 - title_surf.get_width() // 2, 20))
+
+        inventory = self.db.get_inventory()
+        self.inventory_buttons.clear()
+        y_offset = 60
+        for item in inventory:
+            item_name, quantity, _, _, _ = item
+            item_text = f"{item_name} (x{quantity})"
+            item_surf = self.font.render(item_text, True, COLOR_TEXT)
+            item_rect = pygame.Rect(50, y_offset, SCREEN_WIDTH - 100, 40)
+            self.inventory_buttons.append((item_rect, item_name))
+            pygame.draw.rect(self.screen, COLOR_BTN, item_rect, border_radius=5)
+            self.screen.blit(item_surf, (item_rect.x + 10, item_rect.y + 10))
+            y_offset += 50
+
+        close_button = pygame.Rect(SCREEN_WIDTH // 2 - 50, SCREEN_HEIGHT - 60, 100, 40)
+        self.inventory_buttons.append((close_button, "CLOSE"))
+        pygame.draw.rect(self.screen, COLOR_BTN, close_button, border_radius=5)
+        close_surf = self.font.render("Close", True, COLOR_TEXT)
+        self.screen.blit(close_surf, close_surf.get_rect(center=close_button.center))
+
+    def draw_shop(self):
+        self.screen.fill(COLOR_BG)
+        title_surf = self.font.render("Shop", True, COLOR_TEXT)
+        self.screen.blit(title_surf, (SCREEN_WIDTH // 2 - title_surf.get_width() // 2, 20))
+        points_surf = self.font.render(f"Points: {self.pet.stats.points}", True, COLOR_TEXT)
+        self.screen.blit(points_surf, (20, 20))
+
+        self.shop_buttons.clear()
+        y_offset = 60
+        for item_name, price in SHOP_ITEMS.items():
+            item_text = f"Buy {item_name} - {price} pts"
+            item_surf = self.font.render(item_text, True, COLOR_TEXT)
+            item_rect = pygame.Rect(50, y_offset, SCREEN_WIDTH - 100, 40)
+            self.shop_buttons.append((item_rect, item_name))
+            pygame.draw.rect(self.screen, COLOR_BTN, item_rect, border_radius=5)
+            self.screen.blit(item_surf, (item_rect.x + 10, item_rect.y + 10))
+            y_offset += 50
+
+        close_button = pygame.Rect(SCREEN_WIDTH // 2 - 50, SCREEN_HEIGHT - 60, 100, 40)
+        self.shop_buttons.append((close_button, "CLOSE"))
+        pygame.draw.rect(self.screen, COLOR_BTN, close_button, border_radius=5)
+        close_surf = self.font.render("Close", True, COLOR_TEXT)
+        self.screen.blit(close_surf, close_surf.get_rect(center=close_button.center))
+
+    def handle_inventory_clicks(self, click_pos):
+        for rect, name in self.inventory_buttons:
+            if rect.collidepoint(click_pos):
+                if name == "CLOSE":
+                    self.game_state = GameState.PET_VIEW
+                else:
+                    item = self.db.get_item(name)
+                    if item and self.db.remove_item_from_inventory(name):
+                        _, _, _, effect_stat, effect_value = item
+                        current_value = getattr(self.pet.stats, effect_stat)
+                        setattr(self.pet.stats, effect_stat, self.pet.stats.clamp(current_value + effect_value))
+                        self.pet.action_feedback_text = f"Used {name}!"
+                        self.pet.action_feedback_timer = 2.0
+                        self.game_state = GameState.PET_VIEW
+
+    def handle_shop_clicks(self, click_pos):
+        for rect, name in self.shop_buttons:
+            if rect.collidepoint(click_pos):
+                if name == "CLOSE":
+                    self.game_state = GameState.PET_VIEW
+                else:
+                    price = SHOP_ITEMS.get(name)
+                    if price and self.pet.stats.points >= price:
+                        self.pet.stats.points -= price
+                        self.db.add_item_to_inventory(name)
+                        self.pet.action_feedback_text = f"Bought {name}!"
+                        self.pet.action_feedback_timer = 2.0
+
     def run(self):
         """Main game loop."""
         running = True
         while running:
-            # Delta time in seconds (where the original error occurred)
-            dt = self.clock.tick(FPS) / 1000.0 
-
-            # Update game_time for accelerated day/night cycle
+            dt = self.clock.tick(FPS) / 1000.0
+            
             self.game_time += datetime.timedelta(seconds=dt * TIME_SCALE_FACTOR)
             current_hour = self.game_time.hour
-            # --- Day/Night Cycle ---
+            
             if 6 <= current_hour < 12:
-                current_bg_color = COLOR_DAY_BG # Morning/Day
+                current_bg_color = COLOR_DAY_BG
             elif 12 <= current_hour < 18:
-                current_bg_color = COLOR_DUSK_BG # Afternoon/Dusk
+                current_bg_color = COLOR_DUSK_BG
             elif 18 <= current_hour < 24:
-                current_bg_color = COLOR_NIGHT_BG # Evening/Night
+                current_bg_color = COLOR_NIGHT_BG
             else:
-                current_bg_color = COLOR_DAWN_BG # Late Night/Dawn
+                current_bg_color = COLOR_DAWN_BG
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
                     break
                 
-                # Handle mouse clicks AND touchscreen input
                 click_pos = None
-
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     click_pos = event.pos
-
                 elif event.type == pygame.FINGERDOWN:
                     win_w, win_h = self.screen.get_size()
-                    click_pos = (
-                        int(event.x * win_w),
-                        int(event.y * win_h)
-                    )
+                    click_pos = (int(event.x * win_w), int(event.y * win_h))
 
                 if click_pos:
-                    if self.pet.state == PetState.DEAD:
-                        continue
+                    if self.game_state == GameState.PET_VIEW:
+                        if self.pet.state != PetState.DEAD:
+                            if self.sound_click:
+                                is_on_button = any(rect.collidepoint(click_pos) for rect, _, _ in self.buttons)
+                                is_on_pet = self.pet_click_area.collidepoint(click_pos)
+                                if is_on_button or (self.pet.state == PetState.SICK and is_on_pet):
+                                    self.sound_click.play()
+                            if self.pet.state == PetState.SICK and self.pet_click_area.collidepoint(click_pos):
+                                self.handle_heal()
+                            for rect, name, action in self.buttons:
+                                if rect.collidepoint(click_pos):
+                                    action()
+                    elif self.game_state == GameState.INVENTORY_VIEW:
+                        self.handle_inventory_clicks(click_pos)
+                    elif self.game_state == GameState.SHOP_VIEW:
+                        self.handle_shop_clicks(click_pos)
 
-                    # Play a generic click sound for any valid screen press
-                    if self.sound_click:
-                        is_on_button = any(rect.collidepoint(click_pos) for rect, _, _ in self.buttons)
-                        is_on_pet = self.pet_click_area.collidepoint(click_pos)
-                        if is_on_button or (self.pet.state == PetState.SICK and is_on_pet):
-                            self.sound_click.play()
-
-                    # Check for clicks on the Pet itself (for healing)
-                    if self.pet.state == PetState.SICK and self.pet_click_area.collidepoint(click_pos):
-                        self.handle_heal()
-
-                    # Check for button clicks
-                    for rect, name, action in self.buttons:
-                        if rect.collidepoint(click_pos):
-                            action()
-
-            # --- UPDATE ---
-            self.pet.update(dt, current_hour) 
-
-            if self.pet.stats.happiness > self.prev_stats.happiness: self.stat_flash_timers['happy'] = 1.5
-            if self.pet.stats.fullness > self.prev_stats.fullness: self.stat_flash_timers['full'] = 1.5
-            if self.pet.stats.discipline > self.prev_stats.discipline: self.stat_flash_timers['train'] = 1.5
-            if self.pet.stats.energy > self.prev_stats.energy: self.stat_flash_timers['nrg'] = 1.5
-            if self.pet.stats.health > self.prev_stats.health: self.stat_flash_timers['health'] = 1.5
-
-            for stat_key in list(self.stat_flash_timers.keys()):
-                self.stat_flash_timers[stat_key] -= dt
-                if self.stat_flash_timers[stat_key] <= 0:
-                    del self.stat_flash_timers[stat_key]
-            
-            self.update_prev_stats()
+            if self.game_state == GameState.PET_VIEW:
+                self.pet.update(dt, current_hour)
+                if self.pet.stats.happiness > self.prev_stats.happiness: self.stat_flash_timers['happy'] = 1.5
+                if self.pet.stats.fullness > self.prev_stats.fullness: self.stat_flash_timers['full'] = 1.5
+                if self.pet.stats.discipline > self.prev_stats.discipline: self.stat_flash_timers['train'] = 1.5
+                if self.pet.stats.energy > self.prev_stats.energy: self.stat_flash_timers['nrg'] = 1.5
+                if self.pet.stats.health > self.prev_stats.health: self.stat_flash_timers['health'] = 1.5
+                for stat_key in list(self.stat_flash_timers.keys()):
+                    self.stat_flash_timers[stat_key] -= dt
+                    if self.stat_flash_timers[stat_key] <= 0:
+                        del self.stat_flash_timers[stat_key]
+                self.update_prev_stats()
 
             if running:
-                # --- RENDER ---
                 self.screen.fill(current_bg_color)
-
-                # Draw the pet
-                cx, cy = self.pet_center_x, self.pet_center_y
-                self.pet.draw(self.screen, cx, cy, self.font)
-
-                # Draw stat bars
-                self.draw_bar(20, 30, self.pet.stats.happiness, (255, 200, 0), "Happiness")
-                self.draw_bar(110, 30, self.pet.stats.fullness, (0, 255, 0), "Fullness")
-                self.draw_bar(200, 30, self.pet.stats.energy, (0, 0, 255), "Energy")
-                self.draw_bar(290, 30, self.pet.stats.health, (255, 0, 0), "Health")
-                self.draw_bar(380, 30, self.pet.stats.discipline, (255, 0, 255), "Discipline")
-
-                # Draw buttons
-                for rect, text, _ in self.buttons:
-                    pygame.draw.rect(self.screen, COLOR_BTN, rect, border_radius=5)
-                    text_surf = self.font.render(text, True, COLOR_TEXT)
-                    text_rect = text_surf.get_rect(center=rect.center)
-                    self.screen.blit(text_surf, text_rect)
-
-                # Update the display
+                if self.game_state == GameState.PET_VIEW:
+                    cx, cy = self.pet_center_x, self.pet_center_y
+                    self.pet.draw(self.screen, cx, cy, self.font)
+                    self.draw_bar(20, 30, self.pet.stats.happiness, (255, 200, 0), "Happiness")
+                    self.draw_bar(110, 30, self.pet.stats.fullness, (0, 255, 0), "Fullness")
+                    self.draw_bar(200, 30, self.pet.stats.energy, (0, 0, 255), "Energy")
+                    self.draw_bar(290, 30, self.pet.stats.health, (255, 0, 0), "Health")
+                    self.draw_bar(380, 30, self.pet.stats.discipline, (255, 0, 255), "Discipline")
+                    points_surf = self.font.render(f"Points: {self.pet.stats.points}", True, COLOR_TEXT)
+                    self.screen.blit(points_surf, (20, 60))
+                    for rect, text, _ in self.buttons:
+                        pygame.draw.rect(self.screen, COLOR_BTN, rect, border_radius=5)
+                        text_surf = self.font.render(text, True, COLOR_TEXT)
+                        text_rect = text_surf.get_rect(center=rect.center)
+                        self.screen.blit(text_surf, text_rect)
+                elif self.game_state == GameState.INVENTORY_VIEW:
+                    self.draw_inventory()
+                elif self.game_state == GameState.SHOP_VIEW:
+                    self.draw_shop()
                 pygame.display.flip()
-            
+
 if __name__ == "__main__":
     engine = GameEngine()
     try:

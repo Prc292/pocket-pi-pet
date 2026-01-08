@@ -2,6 +2,12 @@ import math
 from enum import Enum, auto
 from dataclasses import dataclass
 
+class GameState(Enum):
+    """Manages the overall application state (e.g., showing pet, inventory, or shop)."""
+    PET_VIEW = auto()
+    INVENTORY_VIEW = auto()
+    SHOP_VIEW = auto()
+
 class PetState(Enum):
     """
     Enforces valid states for the pet behavior engine.
@@ -53,6 +59,7 @@ class PetStats:
     health: float = 100.0
     discipline: float = 50.0
     care_mistakes: int = 0
+    points: int = 0
 
     def clamp(self, value):
         return max(0.0, min(100.0, value))
