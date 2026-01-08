@@ -1,13 +1,71 @@
-[Unit]
-Description=Pocket Pi-Pet
-After=network.target
+#!/bin/bash
+# setup_pipet.sh
+# Repo cloned into ~/
+# Virtual environment created in ~/venv
+# Installs all dependencies and sets up PulseAudio
 
-[Service]
-User=brian
-Group=brian
-WorkingDirectory=/home/brian/pipet
-ExecStart=/home/brian/pipet/venv/bin/python /home/brian/pipet/Tamagotchi/main.py
-Restart=always
+set -e
 
-[Install]
-WantedBy=multi-user.target
+cd ~
+
+# 1 Clone repo into ~/
+if [ ! -d "pipet" ]; then
+    echo "Cloning repo into ~/..."
+    git clone https://github.com/YOUR_USERNAME/YOUR_REPO.git
+else
+    echo "~/pipet already exists — updating..."
+    cd pipet
+    git clone -b dev https://github.com/Prc292/pipet.git
+    
+fi
+
+# 2️⃣ Install system deps
+echo "Installing system dependencies..."
+sudo apt update
+sudo apt install -y \
+    git \
+    python3 python3-pip python3-venv \
+    libsdl2-2.0-0 \
+    libsdl2-image-2.0-0 \
+    libsdl2-mixer-2.0-0 \
+    libsdl2-ttf-2.0-0 \
+    tslib libts-bin \
+    pulseaudio pulseaudio-utils libasound2-plugins
+
+# 3️⃣ Create venv in HOME directory
+if [ ! -d "venv" ]; then
+    echo "Creating virtual environment in ~/venv..."
+    python3 -m venv ~/pipet/venv
+fi
+
+# Activate it
+source ~/pipet/venv/bin/activate
+
+# 4️⃣ Python deps
+echo "Upgrading pip..."
+pip install --upgrade pip
+
+if [ -f ~/pipet/Tamagotchi/requirements.txt ]; then
+    pip install -r ~/pipet/Tamagotchi/requirements.txt
+else
+    pip install pygame
+fi
+
+# 5️⃣ Start PulseAudio
+pulseaudio --start || true
+
+echo ""
+echo "====================================================="
+echo " INSTALL COMPLETE "
+echo "====================================================="
+echo ""
+echo "To run the game:"
+echo "  source ~/venv/bin/activate"
+echo "  export SDL_VIDEODRIVER=KMSDRM"
+echo "  export SDL_FBDEV=/dev/fb0"
+echo "  export SDL_MOUSEDRV=TSLIB"
+echo "  export SDL_MOUSEDEV=/dev/input/event0"
+echo "  export SDL_AUDIODRIVER=pulse"
+echo "  python3 ~/pipet/Tamagotchi/main.py"
+echo ""
+echo "====================================================="
