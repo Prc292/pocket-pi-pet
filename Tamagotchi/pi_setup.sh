@@ -10,13 +10,15 @@ sudo apt update
 
 echo "Installing Python, pip, git, and SDL2 dependencies..."
 sudo apt install -y \
-    python3 python3-pip python3-venv git \
+    git \
+    python3 python3-pip python3-venv \
     libsdl2-2.0-0 \
     libsdl2-image-2.0-0 \
     libsdl2-mixer-2.0-0 \
     libsdl2-ttf-2.0-0 \
     python3-pygame \
-    tslib libts-bin
+    libts0 libts-bin \
+    pulseaudio pulseaudio-utils libasound2-plugins
 
 echo "Creating Python virtual environment..."
 python3 -m venv venv
