@@ -37,10 +37,65 @@ export SDL_VIDEODRIVER=KMSDRM
 export SDL_FBDEV=/dev/fb0
 export SDL_MOUSEDRV=TSLIB
 export SDL_MOUSEDEV=/dev/input/event0
+export SDL_AUDIODRIVER=pulse
+
+# ------------------ ADD CONFIG.TXT SETTINGS ------------------
+echo "Configuring /boot/firmware/config.txt for HDMI/KMS..."
+CONFIG_BLOCK="
+dtoverlay=vc4-kms-v3d
+max_framebuffers=2
+disable_fw_kms_setup=1
+arm_boost=1
+hdmi_force_hotplug=1
+hdmi_group=2
+hdmi_mode=2
+hdmi_cvt=1280 720 30 6 0 0 0
+"
+
+if ! grep -q "dtoverlay=vc4-kms-v3d" /boot/firmware/config.txt; then
+    echo "$CONFIG_BLOCK" | sudo tee -a /boot/firmware/config.txt > /dev/null
+    echo "Added HDMI/touchscreen KMS settings to config.txt"
+else
+    echo "config.txt already has these settings — skipping"
+fi
+# -------------------------------------------------------------
 
 echo ""
 echo "======================================================"
-echo "Setup complete! You can now run the game with:"
+echo "Setup complete! "NOTE: Reboot is required for config.txt changes to take effect."
+echo "after reboot, run the following commands to start the game:"
 echo "source ~/pipet/venv/bin/activate"
 echo "python3 ~/pipet/Tamagotchi/main.py"
+echo ""
+.==============================================.
+|                                              |
+|                           .'\                |
+|                          //  ;               |
+|                         /'   |               |
+|        .----..._    _../ |   \               |
+|         \'---._ `.-'      `  .'              |
+|          `.    '              `.             |
+|            :            _,.    '.            |
+|            |     ,_    (() '    |            |
+|            ;   .'(().  '      _/__..-        |
+|            \ _ '       __  _.-'--._          |
+|            ,'.'...____'::-'  \     `'        |
+|           / |   /         .---.              |
+|     .-.  '  '  / ,---.   (     )             |
+|    / /       ,' (     )---`-`-`-.._          |
+|   : '       /  '-`-`-`..........--'\         |
+|   ' :      /  /                     '.       |
+|   :  \    |  .'         o             \      |
+|    \  '  .' /          o       .       '     |
+|     \  `.|  :      ,    : _o--'.\      |     |
+|      `. /  '       ))    (   )  \>     |     |
+|        ;   |      ((      \ /    \___  |     |
+|        ;   |      _))      `'.-'. ,-'` '     |
+|        |    `.   ((`            |/    /      |
+|        \     ).  .))            '    .       |
+|     ----`-'-'  `''.::.________:::mx'' ---    |
+|                                              |
+|                                              |
+|                                              |
+'=============================================='
 echo "======================================================"
