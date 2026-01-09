@@ -17,10 +17,17 @@ class DatabaseManager:
             fullness REAL, happiness REAL, energy REAL, health REAL,
             discipline REAL, care_mistakes INTEGER,
             is_alive INTEGER, birth_time REAL, last_update REAL,
-            life_stage TEXT, state TEXT, name TEXT, points INTEGER
+            life_stage TEXT, state TEXT, name TEXT, coins INTEGER
         )
         """
         self.conn.execute(query)
+
+        # Check if 'points' column exists and rename it to 'coins' if it does
+        cursor = self.conn.execute("PRAGMA table_info(pet_stats)")
+        columns = [column[1] for column in cursor.fetchall()]
+        if "points" in columns and "coins" not in columns:
+            self.conn.execute("ALTER TABLE pet_stats RENAME COLUMN points TO coins")
+
 
         # Inventory Table
         self.conn.execute("""
@@ -75,7 +82,8 @@ class DatabaseManager:
                 ('Energy Drink', 'A quick boost of energy.', 'energy', 30),
                 ('Medicine', 'Helps recover from sickness.', 'health', 25),
                 ('Normal Seed', 'A common seed.', None, None),
-                ('Super Meal', 'A super filling meal.', 'fullness', 50)
+                ('Super Meal', 'A super filling meal.', 'fullness', 50),
+                ('Snack', 'A quick, free bite.', 'fullness', 10)
             ]
             self.conn.executemany("""
                 INSERT INTO items (name, description, effect_stat, effect_value)
@@ -167,14 +175,14 @@ class DatabaseManager:
         query = """
         INSERT OR REPLACE INTO pet_stats 
         (id, fullness, happiness, energy, health, discipline, care_mistakes, 
-         is_alive, birth_time, last_update, life_stage, state, name, points)
+         is_alive, birth_time, last_update, life_stage, state, name, coins)
         VALUES (1,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """
         self.conn.execute(query, (
             pet_data['fullness'], pet_data['happiness'], pet_data['energy'], 
             pet_data['health'], pet_data['discipline'], pet_data['care_mistakes'],
             1 if pet_data['is_alive'] else 0, pet_data['birth_time'], time.time(),
-            pet_data['life_stage'], pet_data['state'], pet_data['name'], pet_data['points']
+            pet_data['life_stage'], pet_data['state'], pet_data['name'], pet_data['coins']
         ))
         self.conn.commit()
 

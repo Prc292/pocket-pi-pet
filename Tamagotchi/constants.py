@@ -6,7 +6,7 @@ DB_FILE = "pet_life.db"
 TIME_SCALE_FACTOR = 1 # 1 = real time, 10 = 10x faster!
 POINTS_PER_WIN = 10
 
-# --- SHOP ---
+# --- SHOP (Prices in Coins) ---
 SHOP_ITEMS = {
     'Standard Meal': 10,
     'Candy': 5,

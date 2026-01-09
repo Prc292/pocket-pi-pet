@@ -60,7 +60,7 @@ class PetStats:
     health: float = 100.0
     discipline: float = 50.0
     care_mistakes: int = 0
-    points: int = 0
+    coins: int = 0
 
     def clamp(self, value):
         return max(0.0, min(100.0, value))

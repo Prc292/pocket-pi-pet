@@ -7,7 +7,7 @@ from models import PetState, PetStats
 from constants import COLOR_PET_BODY, COLOR_PET_EYES, COLOR_HEALTH, COLOR_TEXT, COLOR_SICK, TIME_SCALE_FACTOR 
 
 # --- EVOLUTION TIMES (in real seconds, scaled by TIME_SCALE_FACTOR) ---
-TIME_TO_BABY_SEC = 300.0  # 90 game-seconds (90 / 10)
+TIME_TO_BABY_SEC = 10.0  # 90 game-seconds (90 / 10)
 TIME_TO_CHILD_SEC = 17280.0 # 2 game-days (2 * 24 * 60 * 60 / 10)
 TIME_TO_TEEN_SEC = 34560.0 # 4 game-days (4 * 24 * 60 * 60 / 10)
 TIME_TO_ADULT_SEC = 60480.0 # 7 game-days (7 * 24 * 60 * 60 / 10)
@@ -139,6 +139,7 @@ class Pet:
         if self.life_stage == PetState.EGG and total_game_time > TIME_TO_BABY_SEC:
             self.life_stage = PetState.BABY
             self.transition_to(PetState.IDLE)
+            self.save() # Ensure the life stage change is saved
         elif self.life_stage == PetState.BABY and total_game_time > TIME_TO_CHILD_SEC:
             self.life_stage = PetState.CHILD
             self.transition_to(PetState.IDLE)
@@ -187,15 +188,14 @@ class Pet:
                 if len(row) > 12: 
                     self.name = row[12]
                 if len(row) > 13:
-                    self.stats.points = row[13]
+                    self.stats.coins = row[13]
             
             # Adjust stats based on time passed since last save (scaled time)
             time_passed_real = time.time() - self.last_update
             time_passed_game = time_passed_real * TIME_SCALE_FACTOR
             self.stats.tick(time_passed_game, self.state, datetime.datetime.now().hour) 
 
-        except Exception as e:
-            print(f"Loading failed, starting fresh (Error: {e})")
+        except Exception:
             self.stats = PetStats() 
             self.state = PetState.EGG
             self.life_stage = PetState.EGG
@@ -216,7 +216,7 @@ class Pet:
             'life_stage': self.life_stage.name,
             'state': self.state.name,
             'name': self.name,
-            'points': self.stats.points
+            'coins': self.stats.coins
         }
         self.db.save_pet(pet_data)
     
