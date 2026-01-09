@@ -12,6 +12,7 @@ SHOP_ITEMS = {
     'Candy': 5,
     'Energy Drink': 15,
     'Medicine': 20,
+    'Super Meal': 25,
 }
 
 # --- RETRO UI PALETTE ---

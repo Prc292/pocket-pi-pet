@@ -45,12 +45,7 @@ This phase will make the game feel larger and more persistent.
     *   **Modify `constants.py`:** Define a list of food items with names and effects on stats.
     *   **Modify `main.py`:** Add a "shop" for buying food with points. The "Feed" button should open an inventory menu.
 
-### 3. Introduce the "Generations" Legacy System
-*   **Description:** Allow pets to pass on beneficial traits to their offspring.
-*   **Status:** Pending
-*   **Details:**
-    *   **Modify `pet_entity.py`:** When a pet dies, save its highest achieved stat (e.g., max discipline, total happiness).
-    *   **Modify `main.py`:** When a new game starts, apply a small stat bonus to the new pet based on the previous generation's legacy. Add a "Hall of Fame" or "Lineage" screen.
+
 
 ## Phase 3: Long-Term Engagement and Polish
 
@@ -70,9 +65,3 @@ This final phase adds features to keep players invested for the long run.
     *   **Modify `minigames.py`:** Implement 1-2 new mini-games (e.g., a memory game, a simple reflex game).
     *   **Modify `main.py`:** Allow players to select from available mini-games when clicking the "Play" button.
 
-### 3. Full Audio-Visual Polish
-*   **Description:** Enhance the overall immersive experience with music and comprehensive sound effects.
-*   **Status:** Pending
-*   **Details:**
-    *   **Modify `main.py`:** Add background music. The music could change dynamically based on time of day or pet mood.
-    *   **Integrate `pygame.mixer`:** Implement a wider range of sound effects for all pet actions, UI interactions, and game events.

@@ -7,6 +7,7 @@ class DatabaseManager:
         self.conn = sqlite3.connect(db_path)
         self.create_tables()
         self._initialize_items()
+        self._initialize_plants()
 
     def create_tables(self):
         """Creates the 14-column schema, now including pet name and points."""
@@ -39,6 +40,29 @@ class DatabaseManager:
                 effect_value REAL
             )
         """)
+
+        # Plants Table
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS plants (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                description TEXT,
+                growth_time_seconds INTEGER,
+                reward_item TEXT,
+                reward_quantity INTEGER
+            )
+        """)
+
+        # Garden Plots Table
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS garden_plots (
+                plot_id INTEGER PRIMARY KEY,
+                plant_id INTEGER,
+                plant_time REAL,
+                last_watered_time REAL,
+                FOREIGN KEY (plant_id) REFERENCES plants (id)
+            )
+        """)
         self.conn.commit()
 
     def _initialize_items(self):
@@ -50,11 +74,26 @@ class DatabaseManager:
                 ('Candy', 'A tasty treat that boosts happiness.', 'happiness', 15),
                 ('Energy Drink', 'A quick boost of energy.', 'energy', 30),
                 ('Medicine', 'Helps recover from sickness.', 'health', 25),
+                ('Normal Seed', 'A common seed.', None, None),
+                ('Super Meal', 'A super filling meal.', 'fullness', 50)
             ]
             self.conn.executemany("""
                 INSERT INTO items (name, description, effect_stat, effect_value)
                 VALUES (?, ?, ?, ?)
             """, default_items)
+            self.conn.commit()
+
+    def _initialize_plants(self):
+        """Populate the plants table with default plants if it's empty."""
+        cursor = self.conn.execute("SELECT COUNT(*) FROM plants")
+        if cursor.fetchone()[0] == 0:
+            default_plants = [
+                ('Berry Bush', 'A simple bush that grows berries.', 60, 'Candy', 1),
+            ]
+            self.conn.executemany("""
+                INSERT INTO plants (name, description, growth_time_seconds, reward_item, reward_quantity)
+                VALUES (?, ?, ?, ?, ?)
+            """, default_plants)
             self.conn.commit()
 
     def get_inventory(self):
@@ -97,6 +136,32 @@ class DatabaseManager:
         """Retrieves a single item's details by name."""
         cursor = self.conn.execute("SELECT * FROM items WHERE name = ?", (item_name,))
         return cursor.fetchone()
+
+    def get_plant(self, plant_id):
+        """Retrieves a single plant's details by id."""
+        cursor = self.conn.execute("SELECT * FROM plants WHERE id = ?", (plant_id,))
+        return cursor.fetchone()
+
+    def get_garden_plots(self):
+        """Retrieves all garden plots."""
+        cursor = self.conn.execute("SELECT * FROM garden_plots")
+        return cursor.fetchall()
+
+    def plant_seed(self, plot_id, plant_name):
+        """Plants a seed in a specific plot."""
+        plant_id = None
+        if plant_name:
+            cursor = self.conn.execute("SELECT id FROM plants WHERE name = ?", (plant_name,))
+            plant_id = cursor.fetchone()[0] # Get the actual ID
+
+        self.conn.execute("INSERT OR REPLACE INTO garden_plots (plot_id, plant_id, plant_time, last_watered_time) VALUES (?, ?, ?, ?)",
+                          (plot_id, plant_id, time.time(), time.time()))
+        self.conn.commit()
+
+    def water_plant(self, plot_id):
+        """Updates the last watered time for a plant."""
+        self.conn.execute("UPDATE garden_plots SET last_watered_time = ? WHERE plot_id = ?", (time.time(), plot_id))
+        self.conn.commit()
 
     def save_pet(self, pet_data):
         query = """

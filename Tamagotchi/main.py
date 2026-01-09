@@ -6,6 +6,7 @@ from models import GameState, PetState, PetStats
 from database import DatabaseManager
 from pet_entity import Pet
 from minigames import bouncing_pet_game
+from gardening import GardeningGame
 import time
 import datetime
 
@@ -25,14 +26,12 @@ class GameEngine:
 
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SCALED | pygame.RESIZABLE)
         
-        # --- FIX: Separated assignment for robustness ---
         self.clock = pygame.time.Clock()
         self.font = pygame.font.Font(None, 22)
-        # -----------------------------------------------
 
         self.db = DatabaseManager(DB_FILE)
         
-        self.pet = Pet(self.db, name="Gizmo") # Initial pet name
+        self.pet = Pet(self.db, name="Gizmo")
         self.pet.load()
 
         self.stat_flash_timers = {}
@@ -41,61 +40,51 @@ class GameEngine:
         self.game_time = datetime.datetime.now()
         self.game_state = GameState.PET_VIEW
 
-        # --- Load Sounds (with placeholders) ---
-        # NOTE: You must create these .wav files in the Tamagotchi folder!
+        # --- Load Sounds and Music ---
+        base_path = os.path.dirname(__file__)
         try:
-            base_path = os.path.dirname(__file__)
             self.sound_click = pygame.mixer.Sound(os.path.join(base_path, "click.wav"))
             self.sound_eat = pygame.mixer.Sound(os.path.join(base_path, "eat.wav"))
             self.sound_play = pygame.mixer.Sound(os.path.join(base_path, "play.wav"))
             self.sound_heal = pygame.mixer.Sound(os.path.join(base_path, "heal.wav"))
         except pygame.error as e:
             print(f"Warning: Could not load sound files. Game will be silent. Error: {e}")
-            self.sound_click = None
-            self.sound_eat = None
-            self.sound_play = None
-            self.sound_heal = None
+            self.sound_click, self.sound_eat, self.sound_play, self.sound_heal = None, None, None, None
+
+        # Thought Bubble Setup
+        self.thought_bubble = ThoughtBubble(self.screen, self.font, lambda: (self.pet_center_x, self.pet_center_y)) # Pass a lambda to get current pet's pos
 
 
         # UI Hitboxes
         self.pet_center_x, self.pet_center_y = SCREEN_WIDTH // 2, 163
-        self.pet_click_area = pygame.Rect(
-            self.pet_center_x - 40, self.pet_center_y - 40, 80, 80
-        )
-        
+        self.pet_click_area = pygame.Rect(self.pet_center_x - 40, self.pet_center_y - 40, 80, 80)
         
         self.btn_feed = pygame.Rect(10, SCREEN_HEIGHT - 60, 70, 40)
-        self.btn_play = pygame.Rect(85, SCREEN_HEIGHT - 60, 70, 40)
+        self.btn_activities = pygame.Rect(85, SCREEN_HEIGHT - 60, 70, 40)
         self.btn_train = pygame.Rect(160, SCREEN_HEIGHT - 60, 70, 40)
         self.btn_sleep = pygame.Rect(235, SCREEN_HEIGHT - 60, 70, 40)
         self.btn_shop = pygame.Rect(310, SCREEN_HEIGHT - 60, 70, 40)
         self.btn_quit = pygame.Rect(385, SCREEN_HEIGHT - 60, 85, 40)
         
-
-        # Button map for easy access
         self.buttons = [
             (self.btn_feed, "FEED", self.handle_feed),
-            (self.btn_play, "PLAY", self.handle_play),
+            (self.btn_activities, "ACTIVITIES", self.handle_activities),
             (self.btn_train, "TRAIN", self.handle_train),
             (self.btn_sleep, "SLEEP", self._toggle_sleep),
             (self.btn_shop, "SHOP", self.handle_shop),
             (self.btn_quit, "QUIT", lambda: sys.exit())
         ]
-        self.inventory_buttons = []
-        self.shop_buttons = []
+        self.inventory_buttons, self.shop_buttons, self.activities_buttons = [], [], []
 
-    # --- Action Handlers with Sound ---
     def handle_feed(self):
         if self.pet.state == PetState.IDLE:
             self.game_state = GameState.INVENTORY_VIEW
 
     def handle_shop(self):
-        self.game_state = GameState.SHOP_VIEW
-
-    def handle_play(self):
+                    self.game_state = GameState.SHOP_VIEW
+    def handle_activities(self):
         if self.pet.state == PetState.IDLE:
-            if self.sound_play: self.sound_play.play()
-            self.play_minigame()
+            self.game_state = GameState.ACTIVITIES_VIEW
 
     def handle_train(self):
         if self.pet.state == PetState.IDLE or self.pet.state == PetState.SICK:
@@ -108,7 +97,6 @@ class GameEngine:
             self.pet.heal()
 
     def _toggle_sleep(self):
-        """Logic for the sleep button."""
         if self.sound_click: self.sound_click.play()
         if self.pet.state == PetState.SLEEPING:
             self.pet.transition_to(PetState.IDLE)
@@ -122,7 +110,7 @@ class GameEngine:
         self.pet.stats.points += score // 10
         self.pet.action_feedback_text = f"+{score} HAPPY! +{score//10} PTS"
         self.pet.action_feedback_timer = 2.0
-        self.pet.transition_to(PetState.IDLE)
+        self.game_state = GameState.PET_VIEW
 
     def update_prev_stats(self):
         self.prev_stats.fullness = self.pet.stats.fullness
@@ -155,30 +143,46 @@ class GameEngine:
         val_txt = self.font.render(f"{int(value)}%", True, COLOR_TEXT)
         self.screen.blit(val_txt, (x + bar_width // 2 - val_txt.get_width() // 2, y + bar_height // 2 - val_txt.get_height() // 2))
 
-
     def draw_inventory(self):
         self.screen.fill(COLOR_BG)
         title_surf = self.font.render("Inventory", True, COLOR_TEXT)
         self.screen.blit(title_surf, (SCREEN_WIDTH // 2 - title_surf.get_width() // 2, 20))
 
-        inventory = self.db.get_inventory()
         self.inventory_buttons.clear()
-        y_offset = 60
-        for item in inventory:
+        for i, item in enumerate(self.db.get_inventory()):
             item_name, quantity, _, _, _ = item
             item_text = f"{item_name} (x{quantity})"
-            item_surf = self.font.render(item_text, True, COLOR_TEXT)
-            item_rect = pygame.Rect(50, y_offset, SCREEN_WIDTH - 100, 40)
+            item_rect = pygame.Rect(50, 60 + i * 50, SCREEN_WIDTH - 100, 40)
             self.inventory_buttons.append((item_rect, item_name))
             pygame.draw.rect(self.screen, COLOR_BTN, item_rect, border_radius=5)
-            self.screen.blit(item_surf, (item_rect.x + 10, item_rect.y + 10))
-            y_offset += 50
+            self.screen.blit(self.font.render(item_text, True, COLOR_TEXT), (item_rect.x + 10, item_rect.y + 10))
 
         close_button = pygame.Rect(SCREEN_WIDTH // 2 - 50, SCREEN_HEIGHT - 60, 100, 40)
         self.inventory_buttons.append((close_button, "CLOSE"))
         pygame.draw.rect(self.screen, COLOR_BTN, close_button, border_radius=5)
-        close_surf = self.font.render("Close", True, COLOR_TEXT)
-        self.screen.blit(close_surf, close_surf.get_rect(center=close_button.center))
+        self.screen.blit(self.font.render("Close", True, COLOR_TEXT), close_button.center)
+    
+    def draw_activities(self):
+        self.screen.fill(COLOR_BG)
+        title_surf = self.font.render("Activities", True, COLOR_TEXT)
+        self.screen.blit(title_surf, (SCREEN_WIDTH // 2 - title_surf.get_width() // 2, 20))
+
+        self.activities_buttons.clear()
+        
+        bouncing_pet_button = pygame.Rect(50, 60, SCREEN_WIDTH - 100, 40)
+        self.activities_buttons.append((bouncing_pet_button, "Bouncing Pet"))
+        pygame.draw.rect(self.screen, COLOR_BTN, bouncing_pet_button, border_radius=5)
+        self.screen.blit(self.font.render("Bouncing Pet", True, COLOR_TEXT), (bouncing_pet_button.x + 10, bouncing_pet_button.y + 10))
+
+        gardening_button = pygame.Rect(50, 110, SCREEN_WIDTH - 100, 40)
+        self.activities_buttons.append((gardening_button, "Gardening"))
+        pygame.draw.rect(self.screen, COLOR_BTN, gardening_button, border_radius=5)
+        self.screen.blit(self.font.render("Gardening (WIP)", True, COLOR_TEXT), (gardening_button.x + 10, gardening_button.y + 10))
+        
+        close_button = pygame.Rect(SCREEN_WIDTH // 2 - 50, SCREEN_HEIGHT - 60, 100, 40)
+        self.activities_buttons.append((close_button, "CLOSE"))
+        pygame.draw.rect(self.screen, COLOR_BTN, close_button, border_radius=5)
+        self.screen.blit(self.font.render("Close", True, COLOR_TEXT), close_button.center)
 
     def draw_shop(self):
         self.screen.fill(COLOR_BG)
@@ -188,21 +192,17 @@ class GameEngine:
         self.screen.blit(points_surf, (20, 20))
 
         self.shop_buttons.clear()
-        y_offset = 60
-        for item_name, price in SHOP_ITEMS.items():
+        for i, (item_name, price) in enumerate(SHOP_ITEMS.items()):
             item_text = f"Buy {item_name} - {price} pts"
-            item_surf = self.font.render(item_text, True, COLOR_TEXT)
-            item_rect = pygame.Rect(50, y_offset, SCREEN_WIDTH - 100, 40)
+            item_rect = pygame.Rect(50, 60 + i * 50, SCREEN_WIDTH - 100, 40)
             self.shop_buttons.append((item_rect, item_name))
             pygame.draw.rect(self.screen, COLOR_BTN, item_rect, border_radius=5)
-            self.screen.blit(item_surf, (item_rect.x + 10, item_rect.y + 10))
-            y_offset += 50
+            self.screen.blit(self.font.render(item_text, True, COLOR_TEXT), (item_rect.x + 10, item_rect.y + 10))
 
         close_button = pygame.Rect(SCREEN_WIDTH // 2 - 50, SCREEN_HEIGHT - 60, 100, 40)
         self.shop_buttons.append((close_button, "CLOSE"))
         pygame.draw.rect(self.screen, COLOR_BTN, close_button, border_radius=5)
-        close_surf = self.font.render("Close", True, COLOR_TEXT)
-        self.screen.blit(close_surf, close_surf.get_rect(center=close_button.center))
+        self.screen.blit(self.font.render("Close", True, COLOR_TEXT), close_button.center)
 
     def handle_inventory_clicks(self, click_pos):
         for rect, name in self.inventory_buttons:
@@ -218,6 +218,19 @@ class GameEngine:
                         self.pet.action_feedback_text = f"Used {name}!"
                         self.pet.action_feedback_timer = 2.0
                         self.game_state = GameState.PET_VIEW
+                        pygame.mixer.music.stop()
+
+    def handle_activities_clicks(self, click_pos):
+        for rect, name in self.activities_buttons:
+            if rect.collidepoint(click_pos):
+                if name == "CLOSE":
+                    self.game_state = GameState.PET_VIEW
+                elif name == "Bouncing Pet":
+                    self.play_minigame()
+                elif name == "Gardening":
+                    gardening_game = GardeningGame(self.screen, self.font, self.db)
+                    gardening_game.run()
+                    self.game_state = GameState.PET_VIEW
 
     def handle_shop_clicks(self, click_pos):
         for rect, name in self.shop_buttons:
@@ -233,7 +246,6 @@ class GameEngine:
                         self.pet.action_feedback_timer = 2.0
 
     def run(self):
-        """Main game loop."""
         running = True
         while running:
             dt = self.clock.tick(FPS) / 1000.0
@@ -241,23 +253,15 @@ class GameEngine:
             self.game_time += datetime.timedelta(seconds=dt * TIME_SCALE_FACTOR)
             current_hour = self.game_time.hour
             
-            if 6 <= current_hour < 12:
-                current_bg_color = COLOR_DAY_BG
-            elif 12 <= current_hour < 18:
-                current_bg_color = COLOR_DUSK_BG
-            elif 18 <= current_hour < 24:
-                current_bg_color = COLOR_NIGHT_BG
-            else:
-                current_bg_color = COLOR_DAWN_BG
-
+            if 6 <= current_hour < 18: current_bg_color = COLOR_DAY_BG
+            elif 18 <= current_hour < 22: current_bg_color = COLOR_DUSK_BG
+            else: current_bg_color = COLOR_NIGHT_BG
+            
             for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    running = False
-                    break
+                if event.type == pygame.QUIT: running = False
                 
                 click_pos = None
-                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    click_pos = event.pos
+                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1: click_pos = event.pos
                 elif event.type == pygame.FINGERDOWN:
                     win_w, win_h = self.screen.get_size()
                     click_pos = (int(event.x * win_w), int(event.y * win_h))
@@ -266,31 +270,23 @@ class GameEngine:
                     if self.game_state == GameState.PET_VIEW:
                         if self.pet.state != PetState.DEAD:
                             if self.sound_click:
-                                is_on_button = any(rect.collidepoint(click_pos) for rect, _, _ in self.buttons)
-                                is_on_pet = self.pet_click_area.collidepoint(click_pos)
-                                if is_on_button or (self.pet.state == PetState.SICK and is_on_pet):
+                                if any(rect.collidepoint(click_pos) for rect, _, _ in self.buttons) or self.pet_click_area.collidepoint(click_pos):
                                     self.sound_click.play()
-                            if self.pet.state == PetState.SICK and self.pet_click_area.collidepoint(click_pos):
-                                self.handle_heal()
+                            if self.pet.state == PetState.SICK and self.pet_click_area.collidepoint(click_pos): self.handle_heal()
                             for rect, name, action in self.buttons:
-                                if rect.collidepoint(click_pos):
-                                    action()
-                    elif self.game_state == GameState.INVENTORY_VIEW:
-                        self.handle_inventory_clicks(click_pos)
-                    elif self.game_state == GameState.SHOP_VIEW:
-                        self.handle_shop_clicks(click_pos)
+                                if rect.collidepoint(click_pos): action()
+                    elif self.game_state == GameState.INVENTORY_VIEW: self.handle_inventory_clicks(click_pos)
+                    elif self.game_state == GameState.SHOP_VIEW: self.handle_shop_clicks(click_pos)
+                    elif self.game_state == GameState.ACTIVITIES_VIEW: self.handle_activities_clicks(click_pos)
 
             if self.game_state == GameState.PET_VIEW:
                 self.pet.update(dt, current_hour)
-                if self.pet.stats.happiness > self.prev_stats.happiness: self.stat_flash_timers['happy'] = 1.5
-                if self.pet.stats.fullness > self.prev_stats.fullness: self.stat_flash_timers['full'] = 1.5
-                if self.pet.stats.discipline > self.prev_stats.discipline: self.stat_flash_timers['train'] = 1.5
-                if self.pet.stats.energy > self.prev_stats.energy: self.stat_flash_timers['nrg'] = 1.5
-                if self.pet.stats.health > self.prev_stats.health: self.stat_flash_timers['health'] = 1.5
-                for stat_key in list(self.stat_flash_timers.keys()):
-                    self.stat_flash_timers[stat_key] -= dt
-                    if self.stat_flash_timers[stat_key] <= 0:
-                        del self.stat_flash_timers[stat_key]
+                for stat in ['happiness', 'fullness', 'discipline', 'energy', 'health']:
+                    if getattr(self.pet.stats, stat) > getattr(self.prev_stats, stat):
+                        self.stat_flash_timers[stat[:5]] = 1.5
+                for key in list(self.stat_flash_timers.keys()):
+                    self.stat_flash_timers[key] -= dt
+                    if self.stat_flash_timers[key] <= 0: del self.stat_flash_timers[key]
                 self.update_prev_stats()
 
             if running:
@@ -298,27 +294,34 @@ class GameEngine:
                 if self.game_state == GameState.PET_VIEW:
                     cx, cy = self.pet_center_x, self.pet_center_y
                     self.pet.draw(self.screen, cx, cy, self.font)
+                    
                     self.draw_bar(20, 30, self.pet.stats.happiness, (255, 200, 0), "Happiness")
                     self.draw_bar(110, 30, self.pet.stats.fullness, (0, 255, 0), "Fullness")
                     self.draw_bar(200, 30, self.pet.stats.energy, (0, 0, 255), "Energy")
                     self.draw_bar(290, 30, self.pet.stats.health, (255, 0, 0), "Health")
                     self.draw_bar(380, 30, self.pet.stats.discipline, (255, 0, 255), "Discipline")
+                    
                     points_surf = self.font.render(f"Points: {self.pet.stats.points}", True, COLOR_TEXT)
                     self.screen.blit(points_surf, (20, 60))
+                    
                     for rect, text, _ in self.buttons:
                         pygame.draw.rect(self.screen, COLOR_BTN, rect, border_radius=5)
                         text_surf = self.font.render(text, True, COLOR_TEXT)
-                        text_rect = text_surf.get_rect(center=rect.center)
-                        self.screen.blit(text_surf, text_rect)
+                        self.screen.blit(text_surf, text_surf.get_rect(center=rect.center))
+                    self.radial_menu.draw()
                 elif self.game_state == GameState.INVENTORY_VIEW:
                     self.draw_inventory()
                 elif self.game_state == GameState.SHOP_VIEW:
                     self.draw_shop()
+                elif self.game_state == GameState.ACTIVITIES_VIEW:
+                    self.draw_activities()
+                
+                # Draw thought bubble if active
+                self.thought_bubble.draw()
+
                 pygame.display.flip()
 
 if __name__ == "__main__":
     engine = GameEngine()
-    try:
-        engine.run()
-    finally:
-        pygame.quit()
+    try: engine.run()
+    finally: pygame.quit()

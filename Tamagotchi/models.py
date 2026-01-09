@@ -7,6 +7,7 @@ class GameState(Enum):
     PET_VIEW = auto()
     INVENTORY_VIEW = auto()
     SHOP_VIEW = auto()
+    ACTIVITIES_VIEW = auto()
 
 class PetState(Enum):
     """
