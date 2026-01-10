@@ -106,8 +106,7 @@ class MessageBox:
 
 # --- Day/Night Cycle Colors ---
 COLOR_DAY_BG = (135, 206, 235)  # Sky Blue
-COLOR_DUSK_BG = (255, 160, 122) # Light Salmon
-COLOR_NIGHT_BG = (25, 25, 112)  # Midnight Blue
+COLOR_DUSK_BG = (255, 165, 0)   # Orange
 COLOR_DAWN_BG = (255, 223, 186) # Peach Puff
 
 
@@ -386,10 +385,7 @@ class GameEngine:
             self.game_time += datetime.timedelta(seconds=dt * TIME_SCALE_FACTOR)
             current_hour = self.game_time.hour
             
-            if 6 <= current_hour < 18: current_bg_color = COLOR_DAY_BG
-            elif 18 <= current_hour < 22: current_bg_color = COLOR_DUSK_BG
-            else: current_bg_color = COLOR_NIGHT_BG
-
+            current_bg_color = COLOR_DAY_BG            
             click_pos = None
             current_pointer_pos = (self.pet_center_x, SCREEN_HEIGHT - 50) # Initialize with a reasonable default
             for event in pygame.event.get():
