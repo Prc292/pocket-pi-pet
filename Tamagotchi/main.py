@@ -391,6 +391,7 @@ class GameEngine:
             else: current_bg_color = COLOR_NIGHT_BG
 
             click_pos = None
+            current_pointer_pos = (self.pet_center_x, SCREEN_HEIGHT - 50) # Initialize with a reasonable default
             for event in pygame.event.get():
                 if event.type == pygame.QUIT: running = False
                 
@@ -402,9 +403,16 @@ class GameEngine:
                     scale_x = self.screen.get_width() / self.native_surface.get_width()
                     scale_y = self.screen.get_height() / self.native_surface.get_height()
                     click_pos = (event.pos[0] / scale_x, event.pos[1] / scale_y)
+                elif event.type == pygame.MOUSEMOTION:
+                    scale_x = self.screen.get_width() / self.native_surface.get_width()
+                    scale_y = self.screen.get_height() / self.native_surface.get_height()
+                    current_pointer_pos = (event.pos[0] / scale_x, event.pos[1] / scale_y)
                 elif event.type == pygame.FINGERDOWN:
                     win_w, win_h = self.native_surface.get_size()
                     click_pos = (int(event.x * win_w), int(event.y * win_h))
+                elif event.type == pygame.FINGERMOTION:
+                    win_w, win_h = self.native_surface.get_size()
+                    current_pointer_pos = (int(event.x * win_w), int(event.y * win_h))
                 
                 if self.game_state == GameState.CATCH_THE_FOOD_MINIGAME and click_pos:
                     self.minigame.handle_event(event, click_pos)
@@ -412,10 +420,7 @@ class GameEngine:
                     self.minigame.handle_event(event, click_pos)
 
             if self.game_state == GameState.CATCH_THE_FOOD_MINIGAME:
-                # Get scaled mouse position
-                unscaled_mouse_pos_x = pygame.mouse.get_pos()[0] / (self.screen.get_width() / self.native_surface.get_width())
-                unscaled_mouse_pos_y = pygame.mouse.get_pos()[1] / (self.screen.get_height() / self.native_surface.get_height())
-                self.minigame.update((unscaled_mouse_pos_x, unscaled_mouse_pos_y))
+                self.minigame.update(current_pointer_pos)
                 self.minigame.draw(self.native_surface)
                 if self.minigame.game_over_acknowledged:
                     score = self.minigame.score
