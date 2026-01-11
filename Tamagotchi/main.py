@@ -291,17 +291,22 @@ class GameEngine:
         self.selected_shop_category = 'snacks'
         self.shop_scroll_offset = 0
         self.shop_content_height = 0
-        self.shop_view_rect = pygame.Rect(50, 170, SCREEN_WIDTH - 100, SCREEN_HEIGHT - 260) # Defines the visible area for item cards
+        # Adjusted shop_view_rect to give more vertical space
+        self.shop_view_rect = pygame.Rect(20, 100, SCREEN_WIDTH - 40, SCREEN_HEIGHT - 100 - 40) 
         self._setup_shop_ui() # Initialize shop UI
     
     def _setup_shop_ui(self):
         # Category buttons
-        button_width = 150
-        button_height = 40
-        start_x = 50
+        button_width = 100
+        button_height = 30
+        margin_between_buttons = 5
+        
+        total_buttons_width = (button_width * len(CATEGORIES)) + (margin_between_buttons * (len(CATEGORIES) - 1))
+        start_x = (SCREEN_WIDTH - total_buttons_width) // 2
+        
         self.shop_category_buttons.clear()
         for i, cat in enumerate(CATEGORIES):
-            btn = Button(start_x + i * (button_width + 10), 120, 
+            btn = Button(start_x + i * (button_width + margin_between_buttons), 60, # Centered, adjusted y
                         button_width, button_height, cat['name'], cat['color'])
             btn.category_id = cat['id']
             self.shop_category_buttons.append(btn)
@@ -312,12 +317,16 @@ class GameEngine:
         self.shop_item_cards.clear()
         items = SHOP_ITEMS[self.selected_shop_category]
         
-        card_width = 140
-        card_height = 220
-        cards_per_row = 4
-        margin = 20
-        start_x = 50
-        start_y = 180
+        card_width = 80 # Adjusted for smaller screen
+        card_height = 100 # Adjusted for smaller screen
+        cards_per_row = 2
+        margin = 15 # Adjusted margin for better spacing
+        
+        total_cards_width = (card_width * cards_per_row) + (margin * (cards_per_row - 1))
+        start_x_cards = (self.shop_view_rect.width - total_cards_width) // 2 # Centered within shop_view_rect
+        
+        # start_y for cards is now relative to shop_view_rect.top, so it's 0 on the scrollable surface
+        start_y_cards = 0 
 
         max_rows = 0
         if items:
@@ -326,13 +335,18 @@ class GameEngine:
         for i, item in enumerate(items):
             row = i // cards_per_row
             col = i % cards_per_row
-            x = start_x + col * (card_width + margin)
-            y = start_y + row * (card_height + margin)
+            # Position relative to the top-left of the shop_view_rect
+            x = start_x_cards + col * (card_width + margin) + self.shop_view_rect.x
+            y = start_y_cards + row * (card_height + margin) + self.shop_view_rect.y
             
             card = ItemCard(item, x, y, card_width, card_height)
             self.shop_item_cards.append(card)
         
-        self.shop_content_height = max_rows * (card_height + margin) - margin # Calculate total height of all cards
+        # Recalculate shop_content_height based on new card_height and margin
+        if items:
+            self.shop_content_height = max_rows * (card_height + margin) - margin
+        else:
+            self.shop_content_height = 0
 
     def handle_feed(self):
         print(f"handle_feed called. Current pet state: {self.pet.state}")
@@ -480,10 +494,54 @@ class GameEngine:
                 btn_color = tuple(min(c + 50, 255) for c in btn_color) # Brighter if selected
             btn.draw(self.native_surface, self.font, color_override=btn_color)
 
-        # Item cards
+        # Item cards - drawn onto a scrollable surface
+        scrollable_surface = pygame.Surface((self.shop_view_rect.width, self.shop_content_height), pygame.SRCALPHA)
+        scrollable_surface.fill((230, 230, 250, 0)) # Transparent background for scrollable content
+
+        mouse_pos = pygame.mouse.get_pos()
+        scaled_mouse_pos = (mouse_pos[0] / (self.screen.get_width() / self.native_surface.get_width()),
+                            mouse_pos[1] / (self.screen.get_height() / self.native_surface.get_height()))
+
         for card in self.shop_item_cards:
-            card.update_hover(scaled_mouse_pos)
-            card.draw(self.native_surface, self.font, self.message_box.small_font)
+            # Adjust card's y-position relative to the scrollable_surface
+            card_draw_y = card.rect.y - self.shop_view_rect.y 
+            
+            # Create a temporary rect for hover detection, relative to the native_surface
+            temp_card_rect = card.rect.copy()
+            temp_card_rect.y -= self.shop_scroll_offset
+            
+            # Only update hover if mouse is within the visible shop view area
+            if self.shop_view_rect.collidepoint(scaled_mouse_pos):
+                 card.update_hover((scaled_mouse_pos[0], scaled_mouse_pos[1] + self.shop_scroll_offset)) # Pass adjusted mouse_pos
+            else:
+                card.hover = False # No hover if outside shop view
+
+            # Draw card only if it's within the visible portion of the scrollable area
+            if (card_draw_y - self.shop_scroll_offset + card.rect.height > 0 and 
+                card_draw_y - self.shop_scroll_offset < self.shop_view_rect.height):
+                
+                # Create a temporary card object with adjusted position for drawing onto the scrollable surface
+                temp_card = ItemCard(card.item, card.rect.x - self.shop_view_rect.x, card_draw_y, card.rect.width, card.rect.height)
+                temp_card.hover = card.hover # Keep hover state
+                temp_card.buy_button.hover = card.buy_button.hover # Keep buy button hover state
+                temp_card.draw(scrollable_surface, self.font, self.message_box.small_font)
+            
+        # Blit the visible part of the scrollable_surface onto the native_surface
+        self.native_surface.blit(scrollable_surface, self.shop_view_rect.topleft, 
+                                 (0, self.shop_scroll_offset, self.shop_view_rect.width, self.shop_view_rect.height))
+
+        # Scroll bar
+        if self.shop_content_height > self.shop_view_rect.height:
+            scrollbar_track_rect = pygame.Rect(self.shop_view_rect.right + 5, self.shop_view_rect.top, 10, self.shop_view_rect.height)
+            pygame.draw.rect(self.native_surface, DARK_GRAY, scrollbar_track_rect, border_radius=5)
+
+            # Calculate thumb size and position
+            thumb_height = max(20, self.shop_view_rect.height * self.shop_view_rect.height // self.shop_content_height)
+            scroll_range = self.shop_content_height - self.shop_view_rect.height
+            thumb_y_pos = self.shop_view_rect.top + (self.shop_scroll_offset * (self.shop_view_rect.height - thumb_height) // scroll_range)
+            
+            scrollbar_thumb_rect = pygame.Rect(scrollbar_track_rect.x, thumb_y_pos, scrollbar_track_rect.width, thumb_height)
+            pygame.draw.rect(self.native_surface, GRAY, scrollbar_thumb_rect, border_radius=5)
 
         # Inventory preview - simplified for now
         inv_title = self.font.render(f"🎒 Your Inventory", True, BLACK)
@@ -576,6 +634,9 @@ class GameEngine:
                 if event.type == pygame.MOUSEWHEEL:
                     if self.message_box.state == 'maximized':
                         self.message_box.handle_scroll(event)
+                    elif self.game_state == GameState.SHOP_VIEW:
+                        self.shop_scroll_offset -= event.y * 10 # Scroll faster
+                        self.shop_scroll_offset = max(0, min(self.shop_scroll_offset, self.shop_content_height - self.shop_view_rect.height))
 
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                     scale_x = self.screen.get_width() / self.native_surface.get_width()
