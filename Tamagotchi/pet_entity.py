@@ -38,6 +38,7 @@ class Pet:
         base_path = os.path.dirname(__file__)
         self.sprite_idle = pygame.image.load(os.path.join(base_path, "assets", "sprites", "bobo_idle.png")).convert_alpha()
         self.sprite_blink = pygame.image.load(os.path.join(base_path, "assets", "sprites", "bobo_blink.png")).convert_alpha()
+        self.sprite_sleeping = pygame.image.load(os.path.join(base_path, "assets", "sprites", "bobo_sleeping-sheet.png")).convert_alpha()
         
         # Animation variables
         self.idle_animation_frames = []
@@ -56,6 +57,11 @@ class Pet:
         self.current_blink_interval_index = 0
         self.time_to_next_blink = self.shuffled_blink_intervals[self.current_blink_interval_index]
 
+        self.sleep_animation_frames = []
+        self.sleep_frame_index = 0
+        self.sleep_animation_timer = 0
+        self.sleep_animation_speed = 0.2  # 200ms per frame
+
         # Parse spritesheets
         sprite_width = 64
         sprite_height = 64
@@ -68,6 +74,11 @@ class Pet:
         for x in range(0, sheet_width_blink, sprite_width):
             frame = self.sprite_blink.subsurface(pygame.Rect(x, 0, sprite_width, sprite_height))
             self.blink_animation_frames.append(frame)
+
+        sheet_width_sleeping = self.sprite_sleeping.get_width()
+        for x in range(0, sheet_width_sleeping, sprite_width):
+            frame = self.sprite_sleeping.subsurface(pygame.Rect(x, 0, sprite_width, sprite_height))
+            self.sleep_animation_frames.append(frame)
         
         # For tracking previous stats to trigger low stat messages once
         self.prev_fullness = self.stats.fullness
@@ -190,6 +201,11 @@ class Pet:
                             random.shuffle(self.shuffled_blink_intervals)
                             self.current_blink_interval_index = 0
                         self.time_to_next_blink = self.shuffled_blink_intervals[self.current_blink_interval_index]
+        elif self.state == PetState.SLEEPING:
+            self.sleep_animation_timer += dt
+            if self.sleep_animation_timer >= self.sleep_animation_speed:
+                self.sleep_animation_timer = 0
+                self.sleep_frame_index = (self.sleep_frame_index + 1) % len(self.sleep_animation_frames)
 
         # 4. State Checks and Evolution
         
@@ -391,7 +407,9 @@ class Pet:
         
         # For all other states, draw the current pet sprite (idle or blinking)
         current_sprite_frame = None
-        if self.is_blinking:
+        if self.state == PetState.SLEEPING:
+            current_sprite_frame = self.sleep_animation_frames[self.sleep_frame_index]
+        elif self.is_blinking:
             current_sprite_frame = self.blink_animation_frames[self.blink_frame_index]
         else:
             current_sprite_frame = self.idle_animation_frames[self.idle_frame_index]
