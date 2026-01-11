@@ -2,6 +2,7 @@ import time
 import math
 import pygame
 import random
+import os
 import datetime # Add this import
 from models import PetState, PetStats
 from constants import COLOR_PET_BODY, COLOR_PET_EYES, COLOR_HEALTH, COLOR_TEXT, COLOR_SICK, TIME_SCALE_FACTOR 
@@ -37,6 +38,24 @@ class Pet:
         
         # Egg cracking animation
         self.crack_level = 0.0
+
+        # Load Sprites
+        base_path = os.path.dirname(__file__)
+        self.sprite_idle_sheet = pygame.image.load(os.path.join(base_path, "assets", "sprites", "bobo_idle.png")).convert_alpha()
+        
+        # Animation variables
+        self.idle_animation_frames = []
+        self.idle_frame_index = 0
+        self.idle_animation_timer = 0
+        self.idle_animation_speed = 0.1  # 100ms per frame
+
+        # Parse spritesheet
+        sprite_width = 64
+        sprite_height = 64
+        sheet_width = self.sprite_idle_sheet.get_width()
+        for x in range(0, sheet_width, sprite_width):
+            frame = self.sprite_idle_sheet.subsurface(pygame.Rect(x, 0, sprite_width, sprite_height))
+            self.idle_animation_frames.append(frame)
         
         # For tracking previous stats to trigger low stat messages once
         self.prev_fullness = self.stats.fullness
@@ -133,6 +152,12 @@ class Pet:
         # 3. Handle Animation Timers (Use real dt for smooth visuals)
         self.idle_bob_timer = (self.idle_bob_timer + dt) % (math.pi * 2) 
         self.idle_bob_offset = math.sin(self.idle_bob_timer * 3) * 2 
+
+        # Update idle animation
+        self.idle_animation_timer += dt
+        if self.idle_animation_timer >= self.idle_animation_speed:
+            self.idle_animation_timer = 0
+            self.idle_frame_index = (self.idle_frame_index + 1) % len(self.idle_animation_frames)
         
 
         # Blinking logic (Use real dt)
@@ -384,6 +409,12 @@ class Pet:
             text_rect = egg_text.get_rect(midright=(cx - radius - 10, cy))
             surface.blit(egg_text, text_rect)
             return # Ensure nothing else is drawn when in EGG state
+            
+        if self.state == PetState.IDLE:
+            # Draw the current frame of the idle animation
+            current_frame = self.idle_animation_frames[self.idle_frame_index]
+            sprite_rect = current_frame.get_rect(center=(cx, cy))
+            surface.blit(current_frame, sprite_rect)
             
         # --- Draw Active Pet Body ---
         else:
