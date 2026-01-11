@@ -96,14 +96,19 @@ Thumbs.db
 .idea/
 
 # Local data and caches
+
 pet_save.json
+
 *.db
 
-# Logs
-*.log
+
 
 # gemini-cli settings
+
 .gemini/
 
+
+
 # GitHub App credentials
+
 gha-creds-*.json
