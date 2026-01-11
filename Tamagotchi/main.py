@@ -13,7 +13,7 @@ import datetime
 
 
 class MessageBox:
-    def __init__(self, screen, font, x, y, width, height, small_font_size=14, duration=3):
+    def __init__(self, screen, font, x, y, width, height, small_font_size=28, duration=3):
         self.screen = screen
         self.font = font
         self.small_font = pygame.font.Font(None, small_font_size)
@@ -64,15 +64,21 @@ class MessageBox:
                 self.active = False
                 self.current_pop_up_message = "" # Clear the pop-up message
 
+    def toggle_state(self, clear_unread_callback):
+        if self.state == 'minimized':
+            self.state = 'maximized'
+            self.scroll_offset = 0
+            clear_unread_callback()
+        elif self.state == 'maximized':
+            self.state = 'minimized'
+
+    def get_pop_up_info(self):
+        """Returns (message, is_active) for the temporary pop-up."""
+        if self.current_pop_up_message and self.active and self.state == 'minimized':
+            return self.current_pop_up_message, True
+        return None, False
+
     def draw(self):
-        # Draw the pop-up message if active and minimized
-        if self.active and self.state == 'minimized' and self.current_pop_up_message:
-            pop_up_surf = self.small_font.render(self.current_pop_up_message, True, COLOR_TEXT)
-            pop_up_rect = pop_up_surf.get_rect(center=(self.screen.get_width() // 2, 20)) # Position at top center
-            # Draw a background for the pop-up
-            pygame.draw.rect(self.screen, (0, 0, 0, 180), pop_up_rect.inflate(10, 5), border_radius=5)
-            self.screen.blit(pop_up_surf, pop_up_rect)
-        
         # Then draw the message box normally (minimized or maximized)
         if self.state == 'minimized':
             self.draw_minimized()
@@ -512,6 +518,16 @@ class GameEngine:
                 
             scaled_surface = pygame.transform.smoothscale(self.native_surface, self.screen.get_size())
             self.screen.blit(scaled_surface, (0, 0))
+
+            # Draw pop-up message last to ensure it's on top
+            pop_up_message, is_pop_up_active = self.message_box.get_pop_up_info()
+            if is_pop_up_active:
+                pop_up_surf = self.message_box.small_font.render(pop_up_message, True, COLOR_TEXT)
+                # Position pop-up relative to the scaled screen for accurate placement
+                pop_up_rect = pop_up_surf.get_rect(center=(self.screen.get_width() // 2, 20)) 
+                pygame.draw.rect(self.screen, (0, 0, 0, 180), pop_up_rect.inflate(10, 5), border_radius=5)
+                self.screen.blit(pop_up_surf, pop_up_rect)
+            
             pygame.display.flip()
 
 if __name__ == "__main__":
