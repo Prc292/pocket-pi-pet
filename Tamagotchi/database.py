@@ -6,8 +6,19 @@ class DatabaseManager:
     def __init__(self, db_path):
         self.conn = sqlite3.connect(db_path)
         self.create_tables()
+        self._perform_migrations()
         self._initialize_items()
         self._initialize_plants()
+
+    def _perform_migrations(self):
+        """Perform database schema migrations."""
+        # Migration: Rename 'points' column to 'coins' in pet_stats table
+        cursor = self.conn.execute("PRAGMA table_info(pet_stats)")
+        columns = [column[1] for column in cursor.fetchall()]
+        if "points" in columns and "coins" not in columns:
+            print("Performing migration: Renaming 'points' column to 'coins' in 'pet_stats' table.")
+            self.conn.execute("ALTER TABLE pet_stats RENAME COLUMN points TO coins")
+            self.conn.commit()
 
     def create_tables(self):
         """Creates the 14-column schema, now including pet name and points."""
@@ -21,12 +32,6 @@ class DatabaseManager:
         )
         """
         self.conn.execute(query)
-
-        # Check if 'points' column exists and rename it to 'coins' if it does
-        cursor = self.conn.execute("PRAGMA table_info(pet_stats)")
-        columns = [column[1] for column in cursor.fetchall()]
-        if "points" in columns and "coins" not in columns:
-            self.conn.execute("ALTER TABLE pet_stats RENAME COLUMN points TO coins")
 
 
         # Inventory Table

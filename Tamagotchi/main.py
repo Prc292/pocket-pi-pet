@@ -20,26 +20,11 @@ from minigames import CatchTheFoodMinigame
 from gardening import GardeningGame
 from shop import TamagotchiShop
 
-# Override screen dimensions for 1280x800
-SCREEN_WIDTH = 1280
-SCREEN_HEIGHT = 800
 
-# Retro Color Palette
-RETRO_PINK = (255, 111, 145)
-RETRO_BLUE = (78, 205, 196)
-RETRO_YELLOW = (255, 209, 102)
-RETRO_PURPLE = (162, 155, 254)
-RETRO_GREEN = (119, 221, 119)
-RETRO_ORANGE = (255, 159, 67)
-RETRO_DARK = (44, 47, 51)
-RETRO_LIGHT = (247, 241, 227)
-RETRO_SHADOW = (30, 30, 35)
 
-# Day/Night colors
-COLOR_DAY_BG = (135, 206, 235)
-COLOR_DUSK_BG = (255, 165, 0)
-COLOR_NIGHT_BG = (25, 25, 112)
-COLOR_DAWN_BG = (255, 223, 186)
+
+
+
 
 
 # ==================== UI COMPONENTS ====================
@@ -62,9 +47,9 @@ class ModernRetroButton:
         """Draw button with retro-modern style"""
         # Shadow
         shadow_rect = self.rect.copy()
-        shadow_rect.x += 6
-        shadow_rect.y += 6
-        pygame.draw.rect(surface, RETRO_SHADOW, shadow_rect, border_radius=8)
+        shadow_rect.x += BUTTON_SHADOW_OFFSET
+        shadow_rect.y += BUTTON_SHADOW_OFFSET
+        pygame.draw.rect(surface, RETRO_SHADOW, shadow_rect, border_radius=BUTTON_BORDER_RADIUS)
         
         # Button press offset
         offset = 3 if self.pressed else 0
@@ -73,22 +58,22 @@ class ModernRetroButton:
         draw_rect.y += offset
         
         # Dark base
-        dark_color = tuple(max(0, c - 30) for c in self.color)
-        pygame.draw.rect(surface, dark_color, draw_rect, border_radius=8)
+        dark_colour = tuple(max(0, c - 30) for c in self.color)
+        pygame.draw.rect(surface, dark_colour, draw_rect, border_radius=BUTTON_BORDER_RADIUS)
         
         # Light top gradient
         gradient_rect = draw_rect.copy()
         gradient_rect.height //= 2
-        light_color = tuple(min(255, c + 20) for c in self.color)
-        pygame.draw.rect(surface, light_color, gradient_rect, border_radius=8)
+        light_colour = tuple(min(255, c + 20) for c in self.color)
+        pygame.draw.rect(surface, light_color, gradient_rect, border_radius=BUTTON_BORDER_RADIUS)
         
         # Glass overlay
-        glass_surf = pygame.Surface((draw_rect.width - 8, draw_rect.height // 3), pygame.SRCALPHA)
-        glass_surf.fill((255, 255, 255, 40))
-        surface.blit(glass_surf, (draw_rect.x + 4, draw_rect.y + 4))
+        glass_surface = pygame.Surface((draw_rect.width - 8, draw_rect.height // 3), pygame.SRCALPHA)
+        glass_surface.fill((255, 255, 255, BUTTON_GLASS_ALPHA))
+        surface.blit(glass_surface, (draw_rect.x + 4, draw_rect.y + 4))
         
         # Border
-        pygame.draw.rect(surface, RETRO_DARK, draw_rect, 4, border_radius=8)
+        pygame.draw.rect(surface, RETRO_DARK, draw_rect, BUTTON_BORDER_WIDTH, border_radius=BUTTON_BORDER_RADIUS)
         
         # Text rendering
         if self.icon:
@@ -96,9 +81,9 @@ class ModernRetroButton:
         else:
             full_text = self.text
             
-        text_surf = font.render(full_text, True, RETRO_DARK)
-        text_rect = text_surf.get_rect(center=draw_rect.center)
-        surface.blit(text_surf, text_rect)
+        text_surface = font.render(full_text, True, RETRO_DARK)
+        text_rect = text_surface.get_rect(center=draw_rect.center)
+        surface.blit(text_surface, text_rect)
     
     def handle_event(self, pos: Tuple[int, int], event_type: int) -> bool:
         """Handle touch events"""
@@ -148,16 +133,16 @@ class PixelStatBar:
     def draw(self, surface: pygame.Surface, font: pygame.font.Font, small_font: pygame.font.Font):
         # Label
         label_text = f"{self.icon} {self.label}"
-        label_surf = small_font.render(label_text, True, RETRO_DARK)
-        surface.blit(label_surf, (self.rect.x, self.rect.y - 30))
+        label_surface = small_font.render(label_text, True, RETRO_DARK)
+        surface.blit(label_surface, (self.rect.x, self.rect.y - 30))
         
         # Border
         border_rect = self.rect.copy()
         border_rect.inflate_ip(8, 8)
-        pygame.draw.rect(surface, RETRO_DARK, border_rect, border_radius=6)
+        pygame.draw.rect(surface, RETRO_DARK, border_rect, border_radius=STAT_BAR_BORDER_RADIUS)
         
         # Background
-        pygame.draw.rect(surface, RETRO_SHADOW, self.rect, border_radius=4)
+        pygame.draw.rect(surface, RETRO_SHADOW, self.rect, border_radius=STAT_BAR_BORDER_RADIUS - 2) # Slightly smaller radius for inner shadow
         
         # Fill color with flash
         fill_color = self.color
@@ -169,10 +154,10 @@ class PixelStatBar:
         if fill_width > 0:
             fill_rect = pygame.Rect(self.rect.x + 4, self.rect.y + 4, 
                                    fill_width, self.rect.height - 8)
-            pygame.draw.rect(surface, fill_color, fill_rect, border_radius=3)
+            pygame.draw.rect(surface, fill_color, fill_rect, border_radius=STAT_BAR_FILL_BORDER_RADIUS)
             
             # Chunky pixel pattern
-            chunk_size = 8
+            chunk_size = STAT_BAR_CHUNK_SIZE
             for i in range(0, fill_width, chunk_size * 2):
                 chunk_rect = pygame.Rect(self.rect.x + 4 + i, self.rect.y + 4, 
                                         min(chunk_size, fill_width - i), self.rect.height - 8)
@@ -181,10 +166,10 @@ class PixelStatBar:
         
         # Percentage text with outline
         value_text = f"{int(self.current_value)}%"
-        value_surf = font.render(value_text, True, RETRO_DARK)
+        value_surface = font.render(value_text, True, RETRO_DARK)
         
         for offset_x, offset_y in [(-1, -1), (1, -1), (-1, 1), (1, 1)]:
-            outline_surf = font.render(value_text, True, RETRO_LIGHT)
+            outline_surface = font.render(value_text, True, RETRO_LIGHT)
             surface.blit(outline_surf, (self.rect.centerx - value_surf.get_width() // 2 + offset_x,
                                        self.rect.centery - value_surf.get_height() // 2 + offset_y))
         
@@ -217,11 +202,10 @@ class MessageBubble:
             return
             
         # Simple single line for now
-        text_surf = font.render(self.message, True, RETRO_DARK)
-        padding = 20
-        bubble_width = text_surf.get_width() + padding * 2
-        bubble_height = text_surf.get_height() + padding * 2
-        
+            text_surface = font.render(self.message, True, RETRO_DARK)
+            padding = 20
+            bubble_width = text_surface.get_width() + padding * 2
+            bubble_height = text_surface.get_height() + padding * 2        
         bubble_rect = pygame.Rect(self.x - bubble_width // 2, self.y - bubble_height - 30,
                                  bubble_width, bubble_height)
         
@@ -232,9 +216,8 @@ class MessageBubble:
         elif self.timer < 0.3:
             alpha = int(self.timer / 0.3 * 255)
         
-        # Bubble
-        bubble_surf = pygame.Surface((bubble_width, bubble_height), pygame.SRCALPHA)
-        pygame.draw.rect(bubble_surf, (*RETRO_LIGHT, alpha), bubble_surf.get_rect(), border_radius=15)
+                    # Bubble
+        bubble_surface = pygame.Surface((bubble_width, bubble_height), pygame.SRCALPHA)        pygame.draw.rect(bubble_surf, (*RETRO_LIGHT, alpha), bubble_surf.get_rect(), border_radius=15)
         pygame.draw.rect(bubble_surf, (*RETRO_DARK, alpha), bubble_surf.get_rect(), 4, border_radius=15)
         
         surface.blit(bubble_surf, bubble_rect)
@@ -266,26 +249,26 @@ class ModernMessageLog:
     
     def draw(self, surface: pygame.Surface, font: pygame.font.Font, small_font: pygame.font.Font):
         if self.is_minimized:
-            tab_surf = pygame.Surface((self.minimized_rect.width, self.minimized_rect.height), 
+            tab_surface = pygame.Surface((self.minimized_rect.width, self.minimized_rect.height), 
                                      pygame.SRCALPHA)
-            tab_surf.fill((*RETRO_PURPLE, 200))
-            pygame.draw.rect(tab_surf, RETRO_DARK, tab_surf.get_rect(), 3, border_radius=8)
+            tab_surface.fill((*RETRO_PURPLE, 200))
+            pygame.draw.rect(tab_surface, RETRO_DARK, tab_surface.get_rect(), 3, border_radius=8)
             
             text = f"📨 Messages"
             if self.unread_count > 0:
                 text += f" ({self.unread_count})"
             text_surf = font.render(text, True, RETRO_LIGHT)
-            tab_surf.blit(text_surf, (self.minimized_rect.width // 2 - text_surf.get_width() // 2,
+            tab_surface.blit(text_surf, (self.minimized_rect.width // 2 - text_surf.get_width() // 2,
                                      self.minimized_rect.height // 2 - text_surf.get_height() // 2))
             
-            surface.blit(tab_surf, self.minimized_rect)
+            surface.blit(tab_surface, self.minimized_rect)
         else:
-            log_surf = pygame.Surface((self.rect.width, self.rect.height), pygame.SRCALPHA)
+            log_surface = pygame.Surface((self.rect.width, self.rect.height), pygame.SRCALPHA)
             log_surf.fill((*RETRO_LIGHT, 240))
-            pygame.draw.rect(log_surf, RETRO_DARK, log_surf.get_rect(), 4, border_radius=10)
+            pygame.draw.rect(log_surface, RETRO_DARK, log_surface.get_rect(), 4, border_radius=10)
             
-            header_surf = small_font.render("MESSAGE LOG", True, RETRO_DARK)
-            log_surf.blit(header_surf, (10, 10))
+            header_surface = small_font.render("MESSAGE LOG", True, RETRO_DARK)
+            log_surface.blit(header_surface, (10, 10))
             
             close_text = small_font.render("[TAP TO CLOSE]", True, RETRO_PURPLE)
             log_surf.blit(close_text, (self.rect.width - close_text.get_width() - 10, 10))
@@ -295,11 +278,11 @@ class ModernMessageLog:
             
             for msg in visible_messages:
                 msg_text = f"[{msg['time']}] {msg['text']}"
-                msg_surf = small_font.render(msg_text, True, RETRO_DARK)
+                msg_surface = small_font.render(msg_text, True, RETRO_DARK)
                 
-                if msg_surf.get_width() > self.rect.width - 20:
+                if msg_surface.get_width() > self.rect.width - 20:
                     msg_text = msg_text[:60] + "..."
-                    msg_surf = small_font.render(msg_text, True, RETRO_DARK)
+                    msg_surface = small_font.render(msg_text, True, RETRO_DARK)
                 
                 log_surf.blit(msg_surf, (10, y_offset))
                 y_offset += 35
@@ -343,7 +326,7 @@ class GameEngine:
         self.db = DatabaseManager(DB_FILE)
 
         # Message log
-        self.message_log = ModernMessageLog(950, 120, 300, 500)
+        self.message_log = ModernMessageLog(MESSAGE_LOG_X, MESSAGE_LOG_Y, MESSAGE_LOG_WIDTH, MESSAGE_LOG_HEIGHT)
 
         # Pet
         self.pet = Pet(self.db, name="Bobo", message_callback=self.add_game_message)
@@ -355,26 +338,26 @@ class GameEngine:
         self.minigame = None
         
         # Pet position
-        self.pet_center_x = SCREEN_WIDTH // 2
-        self.pet_center_y = SCREEN_HEIGHT // 2 + 50
-        self.pet_click_area = pygame.Rect(self.pet_center_x - 100, self.pet_center_y - 100, 200, 200)
+        self.pet_center_x = PET_CENTER_X
+        self.pet_center_y = PET_CENTER_Y
+        self.pet_click_area = pygame.Rect(self.pet_center_x - PET_CLICK_AREA_WIDTH // 2, self.pet_center_y - PET_CLICK_AREA_HEIGHT // 2, PET_CLICK_AREA_WIDTH, PET_CLICK_AREA_HEIGHT)
         
         # UI Components
         self.stat_bars = [
-            PixelStatBar(50, 50, 220, 40, "Happy", "😊", RETRO_YELLOW),
-            PixelStatBar(300, 50, 220, 40, "Full", "🍔", RETRO_GREEN),
-            PixelStatBar(550, 50, 220, 40, "Energy", "⚡", RETRO_BLUE),
-            PixelStatBar(800, 50, 220, 40, "Health", "❤️", RETRO_PINK),
-            PixelStatBar(1050, 50, 220, 40, "Disc", "💪", RETRO_PURPLE),
+            PixelStatBar(50, 50, STAT_BAR_WIDTH, STAT_BAR_HEIGHT, "Happy", "😊", RETRO_YELLOW),
+            PixelStatBar(300, 50, STAT_BAR_WIDTH, STAT_BAR_HEIGHT, "Full", "🍔", RETRO_GREEN),
+            PixelStatBar(550, 50, STAT_BAR_WIDTH, STAT_BAR_HEIGHT, "Energy", "⚡", RETRO_BLUE),
+            PixelStatBar(800, 50, STAT_BAR_WIDTH, STAT_BAR_HEIGHT, "Health", "❤️", RETRO_PINK),
+            PixelStatBar(1050, 50, STAT_BAR_WIDTH, STAT_BAR_HEIGHT, "Disc", "💪", RETRO_PURPLE),
         ]
         
         self.buttons = [
-            ModernRetroButton(50, 700, 180, 70, "FEED", RETRO_GREEN, "🍔", self.handle_feed),
-            ModernRetroButton(250, 700, 180, 70, "PLAY", RETRO_BLUE, "🎮", self.handle_activities),
-            ModernRetroButton(450, 700, 180, 70, "TRAIN", RETRO_PURPLE, "💪", self.handle_train),
-            ModernRetroButton(650, 700, 180, 70, "SLEEP", RETRO_ORANGE, "😴", self._toggle_sleep),
-            ModernRetroButton(850, 700, 180, 70, "SHOP", RETRO_YELLOW, "🛒", self.handle_shop),
-            ModernRetroButton(1050, 700, 180, 70, "QUIT", RETRO_PINK, "❌", lambda: sys.exit()),
+            ModernRetroButton(50, BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT, "FEED", RETRO_GREEN, "🍔", self.handle_feed),
+            ModernRetroButton(250, BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT, "PLAY", RETRO_BLUE, "🎮", self.handle_activities),
+            ModernRetroButton(450, BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT, "TRAIN", RETRO_PURPLE, "💪", self.handle_train),
+            ModernRetroButton(650, BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT, "SLEEP", RETRO_ORANGE, "😴", self._toggle_sleep),
+            ModernRetroButton(850, BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT, "SHOP", RETRO_YELLOW, "🛒", self.handle_shop),
+            ModernRetroButton(1050, BUTTON_Y, BUTTON_WIDTH, BUTTON_HEIGHT, "QUIT", RETRO_PINK, "❌", lambda: sys.exit()),
         ]
         
         self.bubble = MessageBubble(640, 500)
@@ -382,6 +365,8 @@ class GameEngine:
         # Inventory buttons
         self.inventory_buttons = []
         self.activities_buttons = []
+        self._create_inventory_buttons()
+        self._create_activities_buttons()
         
         # Track stat changes for flashing
         self.prev_stats = PetStats()
@@ -407,6 +392,64 @@ class GameEngine:
     
     # ===== Event Handlers =====
     
+    def _use_item(self, item_name: str, is_free_item: bool = False):
+        item = self.db.get_item(item_name)
+        if item:
+            _, _, _, effect_stat, effect_value = item
+            current_value = getattr(self.pet.stats, effect_stat)
+            setattr(self.pet.stats, effect_stat, self.pet.stats.clamp(current_value + effect_value))
+            
+            if not is_free_item:
+                self.db.remove_item_from_inventory(item_name, 1)
+                
+            self.add_game_message(f"Used {item_name}!")
+            self.bubble.show(f"Thanks! 😊")
+            
+            if self.sound_eat:
+                self.sound_eat.play()
+            
+            # Flash appropriate stat bar
+            stat_index = {"happiness": 0, "fullness": 1, "energy": 2, "health": 3, "discipline": 4}
+            if effect_stat in stat_index:
+                self.stat_bars[stat_index[effect_stat]].flash()
+
+    def _create_inventory_buttons(self):
+        buttons = []
+        # Free snack
+        snack_rect = pygame.Rect(360, 350, 560, 60)
+        buttons.append((snack_rect, "Snack"))
+
+        # Inventory items
+        inventory_items = self.db.get_inventory()
+        y_pos = 430
+        for item_name, quantity, _, _, _ in inventory_items:
+            item_rect = pygame.Rect(360, y_pos, 560, 60)
+            buttons.append((item_rect, item_name, quantity))
+            y_pos += 70
+        
+        # Close button
+        close_rect = pygame.Rect(490, 620, 300, 50)
+        buttons.append((close_rect, "CLOSE"))
+        
+        self.inventory_buttons = buttons
+    
+    def _create_activities_buttons(self):
+        buttons = []
+        
+        # Catch the Food
+        catch_rect = pygame.Rect(360, 320, 560, 60)
+        buttons.append((catch_rect, "Catch the Food"))
+        
+        # Gardening
+        garden_rect = pygame.Rect(360, 400, 560, 60)
+        buttons.append((garden_rect, "Gardening"))
+        
+        # Close
+        close_rect = pygame.Rect(490, 520, 300, 50)
+        buttons.append((close_rect, "CLOSE"))
+        
+        self.activities_buttons = buttons
+
     def handle_feed(self):
         if self.pet.state == PetState.IDLE:
             if self.sound_click:
@@ -455,36 +498,11 @@ class GameEngine:
                 if name == "CLOSE":
                     self.game_state = GameState.PET_VIEW
                 elif name == "Snack":
-                    item = self.db.get_item("Snack")
-                    if item:
-                        _, _, _, effect_stat, effect_value = item
-                        current_value = getattr(self.pet.stats, effect_stat)
-                        setattr(self.pet.stats, effect_stat, self.pet.stats.clamp(current_value + effect_value))
-                        self.add_game_message("Fed Bobo a snack!")
-                        self.bubble.show("Yummy! 🍪")
-                        self.game_state = GameState.PET_VIEW
-                        if self.sound_eat:
-                            self.sound_eat.play()
-                        # Flash the appropriate stat
-                        if effect_stat == "fullness":
-                            self.stat_bars[1].flash()
+                    self._use_item(name, is_free_item=True)
+                    self.game_state = GameState.PET_VIEW
                 else:
-                    # Use inventory item
-                    item = self.db.get_item(name)
-                    if item:
-                        _, _, _, effect_stat, effect_value = item
-                        current_value = getattr(self.pet.stats, effect_stat)
-                        setattr(self.pet.stats, effect_stat, self.pet.stats.clamp(current_value + effect_value))
-                        self.db.update_inventory(name, -1)
-                        self.add_game_message(f"Used {name}!")
-                        self.bubble.show(f"Thanks! 😊")
-                        self.game_state = GameState.PET_VIEW
-                        if self.sound_eat:
-                            self.sound_eat.play()
-                        # Flash appropriate stat
-                        stat_index = {"happiness": 0, "fullness": 1, "energy": 2, "health": 3, "discipline": 4}
-                        if effect_stat in stat_index:
-                            self.stat_bars[stat_index[effect_stat]].flash()
+                    self._use_item(name)
+                    self.game_state = GameState.PET_VIEW
     
     def handle_activities_clicks(self, click_pos):
         for rect, name in self.activities_buttons:
@@ -516,8 +534,8 @@ class GameEngine:
             bar.draw(self.screen, self.font_medium, self.font_small)
         
         # Coins
-        coins_surf = self.font_medium.render(f"💰 {self.pet.stats.coins}", True, RETRO_DARK)
-        self.screen.blit(coins_surf, (50, 130))
+        coins_surface = self.font_medium.render(f"💰 {self.pet.stats.coins}", True, RETRO_DARK)
+        self.screen.blit(coins_surface, (50, 130))
         
         # Buttons
         for button in self.buttons:
@@ -534,45 +552,35 @@ class GameEngine:
         pygame.draw.rect(self.screen, RETRO_DARK, panel, 5, border_radius=15)
         
         # Title ("CART" instead of "INVENTORY"), moved down by 100px
-        title_surf = self.font_large.render("CART", True, RETRO_DARK)
-        self.screen.blit(title_surf, (640 - title_surf.get_width() // 2, 280))
+        title_surface = self.font_large.render("CART", True, RETRO_DARK)
+        self.screen.blit(title_surface, (640 - title_surface.get_width() // 2, 280))
         
-        self.inventory_buttons.clear()
+        # Display buttons based on pre-generated list
+        if not self.inventory_buttons: # Check if inventory is empty
+            empty_message = self.font_small.render("Empty! Buy items from the shop.", True, RETRO_DARK)
+            self.screen.blit(empty_message, (640 - empty_message.get_width() // 2, 430 + 30))
         
-        # Free snack (y=350 instead of 250)
-        snack_rect = pygame.Rect(360, 350, 560, 60)
-        self.inventory_buttons.append((snack_rect, "Snack"))
-        pygame.draw.rect(self.screen, RETRO_YELLOW, snack_rect, border_radius=8)
-        pygame.draw.rect(self.screen, RETRO_DARK, snack_rect, 4, border_radius=8)
-        snack_text = self.font_medium.render("🍪 Snack (Free)", True, RETRO_DARK)
-        self.screen.blit(snack_text, (snack_rect.centerx - snack_text.get_width() // 2,
-                                     snack_rect.centery - snack_text.get_height() // 2))
-        
-        # Inventory items (y_pos starts at 430 instead of 330)
-        inventory_items = self.db.get_inventory()
-        y_pos = 430
-        
-        if not inventory_items:
-            empty_msg = self.font_small.render("Empty! Buy items from the shop.", True, RETRO_DARK)
-            self.screen.blit(empty_msg, (640 - empty_msg.get_width() // 2, y_pos + 30))
-        
-        for item_name, quantity, _, _, _ in inventory_items:
-            item_rect = pygame.Rect(360, y_pos, 560, 60)
-            self.inventory_buttons.append((item_rect, item_name))
-            pygame.draw.rect(self.screen, RETRO_BLUE, item_rect, border_radius=8)
-            pygame.draw.rect(self.screen, RETRO_DARK, item_rect, 4, border_radius=8)
-            item_text = self.font_medium.render(f"{item_name} (x{quantity})", True, RETRO_DARK)
-            self.screen.blit(item_text, (item_rect.x + 20, item_rect.centery - item_text.get_height() // 2))
-            y_pos += 70
-        
-        # Close (y=620 instead of 520)
-        close_rect = pygame.Rect(490, 620, 300, 50)
-        self.activities_buttons.append((close_rect, "CLOSE"))
-        pygame.draw.rect(self.screen, RETRO_PINK, close_rect, border_radius=8)
-        pygame.draw.rect(self.screen, RETRO_DARK, close_rect, 4, border_radius=8)
-        close_text = self.font_small.render("Close", True, RETRO_DARK)
-        self.screen.blit(close_text, (close_rect.centerx - close_text.get_width() // 2,
-                                     close_rect.centery - close_text.get_height() // 2))
+        for button_data in self.inventory_buttons:
+            rect, name = button_data[0], button_data[1] # Unpack rect and name
+            quantity = button_data[2] if len(button_data) > 2 else 1 # Get quantity if available
+
+            if name == "CLOSE":
+                close_surface = self.font_small.render("Close", True, RETRO_DARK)
+                pygame.draw.rect(self.screen, RETRO_PINK, rect, border_radius=8)
+                pygame.draw.rect(self.screen, RETRO_DARK, rect, 4, border_radius=8)
+                self.screen.blit(close_surface, (rect.centerx - close_surface.get_width() // 2,
+                                            rect.centery - close_surface.get_height() // 2))
+            elif name == "Snack":
+                snack_surface = self.font_medium.render("🍪 Snack (Free)", True, RETRO_DARK)
+                pygame.draw.rect(self.screen, RETRO_YELLOW, rect, border_radius=8)
+                pygame.draw.rect(self.screen, RETRO_DARK, rect, 4, border_radius=8)
+                self.screen.blit(snack_surface, (rect.centerx - snack_surface.get_width() // 2,
+                                            rect.centery - snack_surface.get_height() // 2))
+            else:
+                item_surface = self.font_medium.render(f"{name} (x{quantity})", True, RETRO_DARK)
+                pygame.draw.rect(self.screen, RETRO_BLUE, rect, border_radius=8)
+                pygame.draw.rect(self.screen, RETRO_DARK, rect, 4, border_radius=8)
+                self.screen.blit(item_surface, (rect.x + 20, rect.centery - item_surface.get_height() // 2))
 
     def draw_activities(self):
         """Draw activities screen"""
@@ -580,37 +588,29 @@ class GameEngine:
         pygame.draw.rect(self.screen, RETRO_LIGHT, panel, border_radius=15)
         pygame.draw.rect(self.screen, RETRO_DARK, panel, 5, border_radius=15)
         
-        title_surf = self.font_large.render("ACTIVITIES", True, RETRO_DARK)
-        self.screen.blit(title_surf, (640 - title_surf.get_width() // 2, 230))
+        title_surface = self.font_large.render("ACTIVITIES", True, RETRO_DARK)
+        self.screen.blit(title_surface, (640 - title_surface.get_width() // 2, 230))
         
-        self.activities_buttons.clear()
-        
-        # Catch the Food
-        catch_rect = pygame.Rect(360, 320, 560, 60)
-        self.activities_buttons.append((catch_rect, "Catch the Food"))
-        pygame.draw.rect(self.screen, RETRO_GREEN, catch_rect, border_radius=8)
-        pygame.draw.rect(self.screen, RETRO_DARK, catch_rect, 4, border_radius=8)
-        catch_text = self.font_medium.render("🍎 Catch the Food", True, RETRO_DARK)
-        self.screen.blit(catch_text, (catch_rect.centerx - catch_text.get_width() // 2,
-                                     catch_rect.centery - catch_text.get_height() // 2))
-        
-        # Gardening
-        garden_rect = pygame.Rect(360, 400, 560, 60)
-        self.activities_buttons.append((garden_rect, "Gardening"))
-        pygame.draw.rect(self.screen, RETRO_ORANGE, garden_rect, border_radius=8)
-        pygame.draw.rect(self.screen, RETRO_DARK, garden_rect, 4, border_radius=8)
-        garden_text = self.font_medium.render("🌱 Gardening", True, RETRO_DARK)
-        self.screen.blit(garden_text, (garden_rect.centerx - garden_text.get_width() // 2,
-                                      garden_rect.centery - garden_text.get_height() // 2))
-        
-        # Close
-        close_rect = pygame.Rect(490, 520, 300, 50)
-        self.activities_buttons.append((close_rect, "CLOSE"))
-        pygame.draw.rect(self.screen, RETRO_PINK, close_rect, border_radius=8)
-        pygame.draw.rect(self.screen, RETRO_DARK, close_rect, 4, border_radius=8)
-        close_text = self.font_small.render("Close", True, RETRO_DARK)
-        self.screen.blit(close_text, (close_rect.centerx - close_text.get_width() // 2,
-                                     close_rect.centery - close_text.get_height() // 2))
+        # Display buttons based on pre-generated list
+        for rect, name in self.activities_buttons:
+            if name == "CLOSE":
+                close_surface = self.font_small.render("Close", True, RETRO_DARK)
+                pygame.draw.rect(self.screen, RETRO_PINK, rect, border_radius=8)
+                pygame.draw.rect(self.screen, RETRO_DARK, rect, 4, border_radius=8)
+                self.screen.blit(close_surface, (rect.centerx - close_surface.get_width() // 2,
+                                            rect.centery - close_surface.get_height() // 2))
+            elif name == "Catch the Food":
+                catch_surface = self.font_medium.render("🍎 Catch the Food", True, RETRO_DARK)
+                pygame.draw.rect(self.screen, RETRO_GREEN, rect, border_radius=8)
+                pygame.draw.rect(self.screen, RETRO_DARK, rect, 4, border_radius=8)
+                self.screen.blit(catch_surface, (rect.centerx - catch_surface.get_width() // 2,
+                                            rect.centery - catch_surface.get_height() // 2))
+            elif name == "Gardening":
+                garden_surface = self.font_medium.render("🌱 Gardening", True, RETRO_DARK)
+                pygame.draw.rect(self.screen, RETRO_ORANGE, rect, border_radius=8)
+                pygame.draw.rect(self.screen, RETRO_DARK, rect, 4, border_radius=8)
+                self.screen.blit(garden_surface, (rect.centerx - garden_surface.get_width() // 2,
+                                            rect.centery - garden_surface.get_height() // 2))
     
     # ===== Main Loop =====
     
@@ -641,7 +641,7 @@ class GameEngine:
                 bg_color = COLOR_NIGHT_BG
             
             # Pointer position for minigames
-            current_pointer_pos = pygame.mouse.get_pos()
+            current_pointer_position = pygame.mouse.get_pos()
             
             # Event handling
             for event in pygame.event.get():
@@ -650,9 +650,9 @@ class GameEngine:
                 
                 # Handle minigame events
                 if self.game_state == GameState.CATCH_THE_FOOD_MINIGAME and event.type in [pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP]:
-                    self.minigame.handle_event(event, current_pointer_pos)
+                    self.minigame.handle_event(event, current_pointer_position)
                 elif self.game_state == GameState.GARDENING_MINIGAME and event.type in [pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP]:
-                    self.minigame.handle_event(event, current_pointer_pos)
+                    self.minigame.handle_event(event, current_pointer_position)
                 
                 # Touch/click events
                 if event.type == pygame.MOUSEBUTTONUP:

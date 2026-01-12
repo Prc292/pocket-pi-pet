@@ -3,7 +3,8 @@ import math
 import pygame
 import random
 import os
-import datetime # Add this import
+import datetime
+import sqlite3
 from models import PetState, PetStats
 from constants import COLOR_PET_BODY, COLOR_PET_EYES, COLOR_HEALTH, COLOR_TEXT, COLOR_SICK, TIME_SCALE_FACTOR 
 
@@ -13,9 +14,7 @@ TIME_TO_CHILD_SEC = 17280.0 # 2 game-days (2 * 24 * 60 * 60 / 10)
 TIME_TO_TEEN_SEC = 34560.0 # 4 game-days (4 * 24 * 60 * 60 / 10)
 TIME_TO_ADULT_SEC = 60480.0 # 7 game-days (7 * 24 * 60 * 60 / 10)
 class Pet:
-    # ------------------------------------------------------------------
-    # FIX #1: Correct __init__ signature (fixes "Pet() takes no arguments")
-    # ------------------------------------------------------------------
+
     def __init__(self, db_manager, name="Pet", message_callback=None): 
         self.name = name
         self.db = db_manager # DatabaseManager instance
@@ -30,15 +29,12 @@ class Pet:
 
         # Animation State
         self.play_bounce_timer = 0.0
+        self.idle_bob_offset = 0.0
         
         # Egg cracking animation
         self.crack_level = 0.0
 
-        # Load Sprites
-        base_path = os.path.dirname(__file__)
-        self.sprite_idle = pygame.image.load(os.path.join(base_path, "assets", "sprites", "bobo_idle.png")).convert_alpha()
-        self.sprite_blink = pygame.image.load(os.path.join(base_path, "assets", "sprites", "bobo_blink.png")).convert_alpha()
-        self.sprite_sleeping = pygame.image.load(os.path.join(base_path, "assets", "sprites", "bobo_sleeping-sheet.png")).convert_alpha()
+        self._load_sprites()
         
         # Animation variables
         self.idle_animation_frames = []
@@ -91,6 +87,31 @@ class Pet:
         self.action_feedback_timer = 0.0
         self.action_feedback_text = ""
 
+    def _load_sprites(self):
+        base_path = os.path.dirname(__file__)
+        self.sprite_idle = pygame.image.load(os.path.join(base_path, "assets", "sprites", "bobo_idle.png")).convert_alpha()
+        self.sprite_blink = pygame.image.load(os.path.join(base_path, "assets", "sprites", "bobo_blink.png")).convert_alpha()
+        self.sprite_sleeping = pygame.image.load(os.path.join(base_path, "assets", "sprites", "bobo_sleeping-sheet.png")).convert_alpha()
+
+        # Parse spritesheets
+        sprite_width = 64
+        sprite_height = 64
+        
+        sheet_width_idle = self.sprite_idle.get_width()
+        for x in range(0, sheet_width_idle, sprite_width):
+            frame = self.sprite_idle.subsurface(pygame.Rect(x, 0, sprite_width, sprite_height))
+            self.idle_animation_frames.append(frame)
+
+        sheet_width_blink = self.sprite_blink.get_width()
+        for x in range(0, sheet_width_blink, sprite_width):
+            frame = self.sprite_blink.subsurface(pygame.Rect(x, 0, sprite_width, sprite_height))
+            self.blink_animation_frames.append(frame)
+
+        sheet_width_sleeping = self.sprite_sleeping.get_width()
+        for x in range(0, sheet_width_sleeping, sprite_width):
+            frame = self.sprite_sleeping.subsurface(pygame.Rect(x, 0, sprite_width, sprite_height))
+            self.sleep_animation_frames.append(frame)
+    
     def transition_to(self, new_state: PetState):
         if self.state != new_state:
             old_state = self.state
@@ -114,7 +135,7 @@ class Pet:
                     self.message_callback(f"It's a {self.name}! Welcome to the world!")
 
     def handle_action_complete(self, action_name: str):
-        # self.action_feedback_timer = 2.0 # No longer needed
+
         
         if self.state == PetState.EATING:
             self.stats.fullness = self.stats.clamp(self.stats.fullness + 20)
@@ -291,7 +312,7 @@ class Pet:
             if self.message_callback:
                 self.message_callback(f"Welcome back! {self.name} is {self.life_stage.name.lower()}.")
 
-        except Exception as e:
+        except sqlite3.Error as e:
             print(f"Error loading pet: {e}. Initializing new pet.")
             self.stats = PetStats() 
             self.state = PetState.EGG
@@ -342,12 +363,12 @@ class Pet:
 
     def _draw_egg_crack(self, surface, cx, cy, radius, crack_level):
         """Draws cracks on the egg based on the crack_level."""
-        egg_color = (245, 245, 210)
-        crack_color = (100, 80, 50)
+        egg_colour = (245, 245, 210)
+        crack_colour = (100, 80, 50)
         
         # Base egg shape
         egg_rect = pygame.Rect(cx - radius, cy - radius * 1.5, radius * 2, radius * 3)
-        pygame.draw.ellipse(surface, egg_color, egg_rect)
+        pygame.draw.ellipse(surface, egg_colour, egg_rect)
 
         # Main crack line (grows with crack_level)
         if crack_level > 0:
@@ -356,18 +377,18 @@ class Pet:
             start_y = cy - radius * (1.2 - crack_level * 0.5) 
             end_x = cx + (radius * 0.3 * math.sin(crack_level * math.pi * 3 + math.pi/2))
             end_y = cy + radius * (1.2 - (1-crack_level) * 0.5)
-            pygame.draw.line(surface, crack_color, (start_x, start_y), (end_x, end_y), 2)
+            pygame.draw.line(surface, crack_colour, (start_x, start_y), (end_x, end_y), 2)
             
             # Branches for the crack
             if crack_level > 0.3:
                 branch1_x = start_x + (end_x - start_x) * 0.3
                 branch1_y = start_y + (end_y - start_y) * 0.3
-                pygame.draw.line(surface, crack_color, (branch1_x, branch1_y), (branch1_x - radius * 0.5 * crack_level, branch1_y - radius * 0.2 * crack_level), 2)
+                pygame.draw.line(surface, crack_colour, (branch1_x, branch1_y), (branch1_x - radius * 0.5 * crack_level, branch1_y - radius * 0.2 * crack_level), 2)
             
             if crack_level > 0.6:
                 branch2_x = start_x + (end_x - start_x) * 0.7
                 branch2_y = start_y + (end_y - start_y) * 0.7
-                pygame.draw.line(surface, crack_color, (branch2_x, branch2_y), (branch2_x + radius * 0.4 * crack_level, branch2_y - radius * 0.3 * crack_level), 2)
+                pygame.draw.line(surface, crack_colour, (branch2_x, branch2_y), (branch2_x + radius * 0.4 * crack_level, branch2_y - radius * 0.3 * crack_level), 2)
         
     def draw(self, surface, cx, cy, font):
         """Draws the pet, applying visual modifications based on state and health."""
@@ -375,12 +396,12 @@ class Pet:
 
         # --- Handle DEAD/EGG State (Early Exit) ---
         if self.state == PetState.DEAD:
-            dead_color = (80, 80, 80)
+            dead_colour = (80, 80, 80)
             # Use a generic sprite size for positioning purposes, e.g., 64x64
             # This is a placeholder since the pet is dead and just displays text
             dead_sprite_width = 64
             dead_sprite_height = 64
-            pygame.draw.ellipse(surface, dead_color, (cx - dead_sprite_width // 2, cy - dead_sprite_height // 4 + 10, dead_sprite_width, dead_sprite_height // 2))
+            pygame.draw.ellipse(surface, dead_colour, (cx - dead_sprite_width // 2, cy - dead_sprite_height // 4 + 10, dead_sprite_width, dead_sprite_height // 2))
             dead_text = font.render("REST IN PEACE", False, (255, 0, 0))
             text_rect = dead_text.get_rect(center=(cx, cy))
             surface.blit(dead_text, text_rect)
