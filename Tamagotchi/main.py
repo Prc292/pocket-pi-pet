@@ -1,6 +1,17 @@
+"""
+Complete integrated game engine with modern-retro UI
+Full integration with your existing codebase
+Optimized for 1280x800 touchscreen on Raspberry Pi 3B
+"""
+
 import os
 import sys
 import pygame
+from typing import Tuple, Optional, Callable
+import datetime
+import time
+
+# Import your existing modules
 from constants import *
 from models import GameState, PetState, PetStats
 from database import DatabaseManager
@@ -9,219 +20,374 @@ from minigames import CatchTheFoodMinigame
 from gardening import GardeningGame
 from shop import TamagotchiShop
 
-import time
-import datetime
-from thought_bubble import ThoughtBubble
+# Override screen dimensions for 1280x800
+SCREEN_WIDTH = 1280
+SCREEN_HEIGHT = 800
+
+# Retro Color Palette
+RETRO_PINK = (255, 111, 145)
+RETRO_BLUE = (78, 205, 196)
+RETRO_YELLOW = (255, 209, 102)
+RETRO_PURPLE = (162, 155, 254)
+RETRO_GREEN = (119, 221, 119)
+RETRO_ORANGE = (255, 159, 67)
+RETRO_DARK = (44, 47, 51)
+RETRO_LIGHT = (247, 241, 227)
+RETRO_SHADOW = (30, 30, 35)
+
+# Day/Night colors
+COLOR_DAY_BG = (135, 206, 235)
+COLOR_DUSK_BG = (255, 165, 0)
+COLOR_NIGHT_BG = (25, 25, 112)
+COLOR_DAWN_BG = (255, 223, 186)
 
 
-class MessageBox:
-    def __init__(self, screen, font, x, y, width, height, small_font_size=28, duration=3):
-        self.screen = screen
-        self.font = font
-        self.small_font = pygame.font.Font(None, small_font_size)
-        
-        self.maximized_height = height
-        self.minimized_height = 30
-        
-        self.rect = pygame.Rect(x, y, width, self.maximized_height) # Maximized rect
-        self.min_rect = pygame.Rect(x, y, width, self.minimized_height)
+# ==================== UI COMPONENTS ====================
 
-        self.messages = []
-        self.padding = 5
-        self.state = 'minimized' # 'minimized', 'maximized'
-        self.scroll_offset = 0
-        self.all_lines = []
-        self.duration = duration # Initialize duration
-        self.current_pop_up_message = "" # Initialize pop-up message
-
-    def _wrap_text(self, text, font, max_width):
-        words = text.split(' ')
-        lines = []
-        current_line = []
-        for word in words:
-            test_line = ' '.join(current_line + [word])
-            if font.size(test_line)[0] <= max_width:
-                current_line.append(word)
-            else:
-                lines.append(' '.join(current_line))
-                current_line = [word]
-        lines.append(' '.join(current_line))
-        return lines
-
-    def add_message(self, text):
-        timestamp = datetime.datetime.now().strftime("%H:%M")
-        full_message = f"[{timestamp}] {text}"
-        self.messages.append(full_message)
-        new_lines = self._wrap_text(full_message, self.font, self.rect.width - 2 * self.padding)
-        self.all_lines.extend(new_lines)
-        # When a new message is added, make it active and set the timer for pop-up
-        self.active = True
-        self.timer = self.duration
-        self.current_pop_up_message = text # Store the message to be displayed as pop-up
-
-    def update(self, dt):
-        if self.active:
-            self.timer -= dt
-            if self.timer <= 0:
-                self.active = False
-                self.current_pop_up_message = "" # Clear the pop-up message
-
-    def toggle_state(self, clear_unread_callback):
-        if self.state == 'minimized':
-            self.state = 'maximized'
-            self.scroll_offset = 0
-            clear_unread_callback()
-        elif self.state == 'maximized':
-            self.state = 'minimized'
-
-    def get_pop_up_info(self):
-        """Returns (message, is_active) for the temporary pop-up."""
-        if self.current_pop_up_message and self.active and self.state == 'minimized':
-            return self.current_pop_up_message, True
-        return None, False
-
-    def draw(self):
-        # Then draw the message box normally (minimized or maximized)
-        if self.state == 'minimized':
-            self.draw_minimized()
-        elif self.state == 'maximized':
-            self.draw_maximized()
-
-    def draw_minimized(self):
-        s = pygame.Surface((self.min_rect.width, self.min_rect.height), pygame.SRCALPHA)
-        s.fill((50, 50, 50, 150)) # A bit of background
-        self.screen.blit(s, self.min_rect.topleft)
-
-        display_text = "Messages"
-        text_surf = self.small_font.render(display_text, False, COLOR_TEXT)
-        # Center the text
-        text_x = self.min_rect.x + (self.min_rect.width - text_surf.get_width()) // 2
-        text_y = self.min_rect.y + (self.min_rect.height - text_surf.get_height()) // 2
-        self.screen.blit(text_surf, (text_x, text_y))
-
-    def draw_maximized(self):
-        s = pygame.Surface((self.rect.width, self.rect.height), pygame.SRCALPHA)
-        s.fill(COLOR_MESSAGE_BOX_BG)
-        self.screen.blit(s, (self.rect.x, self.rect.y))
-        
-        display_lines = []
-        current_height = 0
-        # Iterate from the latest messages (end of all_lines) backwards
-        for i in range(len(self.all_lines) - 1 - self.scroll_offset, -1, -1):
-            line = self.all_lines[i]
-            line_height = self.font.render(line, False, COLOR_TEXT).get_height() + self.padding
-            if current_height + line_height <= self.rect.height:
-                display_lines.insert(0, line) # Insert at beginning to keep order
-                current_height += line_height
-            else:
-                break
-        
-        y_offset = self.padding
-        for line in display_lines:
-            text_surface = self.font.render(line, False, COLOR_TEXT)
-            self.screen.blit(text_surface, (self.rect.x + self.padding, self.rect.y + y_offset))
-            y_offset += text_surface.get_height() + self.padding
-
-    def handle_scroll(self, event):
-        if self.state == 'maximized':
-            # Calculate the total height of all lines
-            total_lines_height = sum(self.font.render(line, False, COLOR_TEXT).get_height() + self.padding for line in self.all_lines)
-            
-            # If content is larger than the display area, allow scrolling
-            if total_lines_height > self.rect.height:
-                # Adjust scroll_offset based on mouse wheel direction
-                # event.y is typically +1 for scroll up, -1 for scroll down
-                self.scroll_offset -= event.y * 1  # Adjust scroll speed as needed
-
-                # Clamp scroll_offset to valid range
-                # max_scroll_offset ensures we don't scroll past the top of the content
-                max_scroll_offset = len(self.all_lines) - 1
-                self.scroll_offset = max(0, min(self.scroll_offset, max_scroll_offset))
-
-
-
-class Button:
-    def __init__(self, x, y, width, height, text, color, text_color=WHITE):
+class ModernRetroButton:
+    """Touch-friendly button with retro pixel aesthetic"""
+    
+    def __init__(self, x: int, y: int, width: int, height: int, 
+                 text: str, color: Tuple[int, int, int],
+                 icon: Optional[str] = None,
+                 on_click: Optional[Callable] = None):
         self.rect = pygame.Rect(x, y, width, height)
         self.text = text
         self.color = color
-        self.text_color = text_color
-        self.hover = False
-
-    def draw(self, screen, font, color_override=None):
-        draw_color = color_override if color_override else (tuple(min(c + 20, 255) for c in self.color) if self.hover else self.color)
-        pygame.draw.rect(screen, draw_color, self.rect, border_radius=10)
-        pygame.draw.rect(screen, BLACK, self.rect, 2, border_radius=10)
+        self.icon = icon
+        self.on_click = on_click
+        self.pressed = False
         
-        text_surface = font.render(self.text, True, self.text_color)
-        text_rect = text_surface.get_rect(center=self.rect.center)
-        screen.blit(text_surface, text_rect)
+    def draw(self, surface: pygame.Surface, font: pygame.font.Font):
+        """Draw button with retro-modern style"""
+        # Shadow
+        shadow_rect = self.rect.copy()
+        shadow_rect.x += 6
+        shadow_rect.y += 6
+        pygame.draw.rect(surface, RETRO_SHADOW, shadow_rect, border_radius=8)
+        
+        # Button press offset
+        offset = 3 if self.pressed else 0
+        draw_rect = self.rect.copy()
+        draw_rect.x += offset
+        draw_rect.y += offset
+        
+        # Dark base
+        dark_color = tuple(max(0, c - 30) for c in self.color)
+        pygame.draw.rect(surface, dark_color, draw_rect, border_radius=8)
+        
+        # Light top gradient
+        gradient_rect = draw_rect.copy()
+        gradient_rect.height //= 2
+        light_color = tuple(min(255, c + 20) for c in self.color)
+        pygame.draw.rect(surface, light_color, gradient_rect, border_radius=8)
+        
+        # Glass overlay
+        glass_surf = pygame.Surface((draw_rect.width - 8, draw_rect.height // 3), pygame.SRCALPHA)
+        glass_surf.fill((255, 255, 255, 40))
+        surface.blit(glass_surf, (draw_rect.x + 4, draw_rect.y + 4))
+        
+        # Border
+        pygame.draw.rect(surface, RETRO_DARK, draw_rect, 4, border_radius=8)
+        
+        # Text rendering
+        if self.icon:
+            full_text = f"{self.icon} {self.text}"
+        else:
+            full_text = self.text
+            
+        text_surf = font.render(full_text, True, RETRO_DARK)
+        text_rect = text_surf.get_rect(center=draw_rect.center)
+        surface.blit(text_surf, text_rect)
+    
+    def handle_event(self, pos: Tuple[int, int], event_type: int) -> bool:
+        """Handle touch events"""
+        if event_type == pygame.MOUSEBUTTONDOWN:
+            if self.rect.collidepoint(pos):
+                self.pressed = True
+                return False
+        elif event_type == pygame.MOUSEBUTTONUP:
+            if self.pressed and self.rect.collidepoint(pos):
+                self.pressed = False
+                if self.on_click:
+                    self.on_click()
+                return True
+            self.pressed = False
+        return False
 
-    def is_clicked(self, pos):
-        return self.rect.collidepoint(pos)
 
-    def update_hover(self, pos):
-        self.hover = self.rect.collidepoint(pos)
+class PixelStatBar:
+    """Retro stat bar with smooth animations"""
+    
+    def __init__(self, x: int, y: int, width: int, height: int,
+                 label: str, icon: str, color: Tuple[int, int, int]):
+        self.rect = pygame.Rect(x, y, width, height)
+        self.label = label
+        self.icon = icon
+        self.color = color
+        self.target_value = 100
+        self.current_value = 100
+        self.flash_timer = 0
+        
+    def set_value(self, value: float):
+        self.target_value = max(0, min(100, value))
+        
+    def update(self, dt: float):
+        if abs(self.current_value - self.target_value) > 0.1:
+            diff = self.target_value - self.current_value
+            self.current_value += diff * 5 * dt
+        else:
+            self.current_value = self.target_value
+            
+        if self.flash_timer > 0:
+            self.flash_timer -= dt
+    
+    def flash(self):
+        self.flash_timer = 1.0
+        
+    def draw(self, surface: pygame.Surface, font: pygame.font.Font, small_font: pygame.font.Font):
+        # Label
+        label_text = f"{self.icon} {self.label}"
+        label_surf = small_font.render(label_text, True, RETRO_DARK)
+        surface.blit(label_surf, (self.rect.x, self.rect.y - 30))
+        
+        # Border
+        border_rect = self.rect.copy()
+        border_rect.inflate_ip(8, 8)
+        pygame.draw.rect(surface, RETRO_DARK, border_rect, border_radius=6)
+        
+        # Background
+        pygame.draw.rect(surface, RETRO_SHADOW, self.rect, border_radius=4)
+        
+        # Fill color with flash
+        fill_color = self.color
+        if self.flash_timer > 0 and int(self.flash_timer * 20) % 2 == 0:
+            fill_color = (255, 255, 255)
+        
+        # Fill bar
+        fill_width = int((self.current_value / 100) * (self.rect.width - 8))
+        if fill_width > 0:
+            fill_rect = pygame.Rect(self.rect.x + 4, self.rect.y + 4, 
+                                   fill_width, self.rect.height - 8)
+            pygame.draw.rect(surface, fill_color, fill_rect, border_radius=3)
+            
+            # Chunky pixel pattern
+            chunk_size = 8
+            for i in range(0, fill_width, chunk_size * 2):
+                chunk_rect = pygame.Rect(self.rect.x + 4 + i, self.rect.y + 4, 
+                                        min(chunk_size, fill_width - i), self.rect.height - 8)
+                dark_fill = tuple(max(0, c - 20) for c in fill_color)
+                pygame.draw.rect(surface, dark_fill, chunk_rect)
+        
+        # Percentage text with outline
+        value_text = f"{int(self.current_value)}%"
+        value_surf = font.render(value_text, True, RETRO_DARK)
+        
+        for offset_x, offset_y in [(-1, -1), (1, -1), (-1, 1), (1, 1)]:
+            outline_surf = font.render(value_text, True, RETRO_LIGHT)
+            surface.blit(outline_surf, (self.rect.centerx - value_surf.get_width() // 2 + offset_x,
+                                       self.rect.centery - value_surf.get_height() // 2 + offset_y))
+        
+        surface.blit(value_surf, (self.rect.centerx - value_surf.get_width() // 2,
+                                 self.rect.centery - value_surf.get_height() // 2))
 
 
-# --- Day/Night Cycle Colors ---
-COLOR_DAY_BG = (135, 206, 235)  # Sky Blue
-COLOR_DUSK_BG = (255, 165, 0)   # Orange
-COLOR_NIGHT_BG = (25, 25, 112)  # Midnight Blue
-COLOR_DAWN_BG = (255, 223, 186) # Peach Puff
+class MessageBubble:
+    """Comic-style speech bubble"""
+    
+    def __init__(self, x: int, y: int, max_width: int = 400):
+        self.x = x
+        self.y = y
+        self.max_width = max_width
+        self.message = ""
+        self.timer = 0
+        self.duration = 3.0
+        
+    def show(self, message: str, duration: float = 3.0):
+        self.message = message
+        self.timer = duration
+        self.duration = duration
+        
+    def update(self, dt: float):
+        if self.timer > 0:
+            self.timer -= dt
+            
+    def draw(self, surface: pygame.Surface, font: pygame.font.Font):
+        if self.timer <= 0 or not self.message:
+            return
+            
+        # Simple single line for now
+        text_surf = font.render(self.message, True, RETRO_DARK)
+        padding = 20
+        bubble_width = text_surf.get_width() + padding * 2
+        bubble_height = text_surf.get_height() + padding * 2
+        
+        bubble_rect = pygame.Rect(self.x - bubble_width // 2, self.y - bubble_height - 30,
+                                 bubble_width, bubble_height)
+        
+        # Fade animation
+        alpha = 255
+        if self.timer > self.duration - 0.3:
+            alpha = int((self.duration - self.timer) / 0.3 * 255)
+        elif self.timer < 0.3:
+            alpha = int(self.timer / 0.3 * 255)
+        
+        # Bubble
+        bubble_surf = pygame.Surface((bubble_width, bubble_height), pygame.SRCALPHA)
+        pygame.draw.rect(bubble_surf, (*RETRO_LIGHT, alpha), bubble_surf.get_rect(), border_radius=15)
+        pygame.draw.rect(bubble_surf, (*RETRO_DARK, alpha), bubble_surf.get_rect(), 4, border_radius=15)
+        
+        surface.blit(bubble_surf, bubble_rect)
+        
+        # Text
+        text_surf.set_alpha(alpha)
+        surface.blit(text_surf, (bubble_rect.x + padding, bubble_rect.y + padding))
 
+
+class ModernMessageLog:
+    """Message log UI"""
+    
+    def __init__(self, x: int, y: int, width: int, height: int):
+        self.rect = pygame.Rect(x, y, width, height)
+        self.minimized_rect = pygame.Rect(x, y, width, 60)
+        self.messages = []
+        self.is_minimized = True
+        self.unread_count = 0
+        
+    def add_message(self, text: str):
+        timestamp = datetime.datetime.now().strftime("%H:%M")
+        self.messages.append({"text": text, "time": timestamp})
+        self.unread_count += 1
+        
+    def toggle(self):
+        self.is_minimized = not self.is_minimized
+        if not self.is_minimized:
+            self.unread_count = 0
+    
+    def draw(self, surface: pygame.Surface, font: pygame.font.Font, small_font: pygame.font.Font):
+        if self.is_minimized:
+            tab_surf = pygame.Surface((self.minimized_rect.width, self.minimized_rect.height), 
+                                     pygame.SRCALPHA)
+            tab_surf.fill((*RETRO_PURPLE, 200))
+            pygame.draw.rect(tab_surf, RETRO_DARK, tab_surf.get_rect(), 3, border_radius=8)
+            
+            text = f"📨 Messages"
+            if self.unread_count > 0:
+                text += f" ({self.unread_count})"
+            text_surf = font.render(text, True, RETRO_LIGHT)
+            tab_surf.blit(text_surf, (self.minimized_rect.width // 2 - text_surf.get_width() // 2,
+                                     self.minimized_rect.height // 2 - text_surf.get_height() // 2))
+            
+            surface.blit(tab_surf, self.minimized_rect)
+        else:
+            log_surf = pygame.Surface((self.rect.width, self.rect.height), pygame.SRCALPHA)
+            log_surf.fill((*RETRO_LIGHT, 240))
+            pygame.draw.rect(log_surf, RETRO_DARK, log_surf.get_rect(), 4, border_radius=10)
+            
+            header_surf = small_font.render("MESSAGE LOG", True, RETRO_DARK)
+            log_surf.blit(header_surf, (10, 10))
+            
+            close_text = small_font.render("[TAP TO CLOSE]", True, RETRO_PURPLE)
+            log_surf.blit(close_text, (self.rect.width - close_text.get_width() - 10, 10))
+            
+            y_offset = 50
+            visible_messages = self.messages[-12:]
+            
+            for msg in visible_messages:
+                msg_text = f"[{msg['time']}] {msg['text']}"
+                msg_surf = small_font.render(msg_text, True, RETRO_DARK)
+                
+                if msg_surf.get_width() > self.rect.width - 20:
+                    msg_text = msg_text[:60] + "..."
+                    msg_surf = small_font.render(msg_text, True, RETRO_DARK)
+                
+                log_surf.blit(msg_surf, (10, y_offset))
+                y_offset += 35
+                
+                if y_offset > self.rect.height - 20:
+                    break
+            
+            surface.blit(log_surf, self.rect)
+
+
+# ==================== GAME ENGINE ====================
 
 class GameEngine:
-    """Orchestrates the MVC relationship."""
+    """Enhanced game engine with modern-retro UI"""
+    
     def add_game_message(self, message_data):
+        """Add message to log"""
         if isinstance(message_data, str):
             text = message_data
-            with_notification = True
         else:
             text = message_data.get("text", "")
-            with_notification = message_data.get("notify", True)
-
-        if not text: return
-
-        self.message_box.add_message(text)
-        if with_notification:
-            self.unread_messages_count += 1
-
+        
+        if text:
+            self.message_log.add_message(text)
+    
     def __init__(self):
         pygame.init()
         pygame.mixer.init()
-
-        # The native resolution of the game
-        self.native_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-        # The window screen, which will be scaled
-        self.screen = pygame.display.set_mode((SCREEN_WIDTH * 2, SCREEN_HEIGHT * 2), pygame.RESIZABLE)
         
-        # Load background image
-        base_path = os.path.dirname(__file__)
-        background_path = os.path.join(base_path, "assets", "backgrounds", "background.png")
-        self.background_image = pygame.image.load(background_path).convert_alpha()
-        self.background_image = pygame.transform.scale(self.background_image, (SCREEN_WIDTH, SCREEN_HEIGHT))
+        self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        pygame.display.set_caption("Tamagotchi - Retro Edition")
         
         self.clock = pygame.time.Clock()
-        self.font = pygame.font.Font(None, 16)
-        self.small_font = pygame.font.Font(None, 12) # Smaller font for item details
-
+        
+        # Fonts - larger for 1280x800
+        self.font_large = pygame.font.Font(None, 48)
+        self.font_medium = pygame.font.Font(None, 36)
+        self.font_small = pygame.font.Font(None, 24)
+        
+        # Database
         self.db = DatabaseManager(DB_FILE)
 
-        self.message_box = MessageBox(self.native_surface, self.font, 290, 50, 170, 150)
-        self.unread_messages_count = 0
-        
+        # Message log
+        self.message_log = ModernMessageLog(950, 120, 300, 500)
+
+        # Pet
         self.pet = Pet(self.db, name="Bobo", message_callback=self.add_game_message)
         self.pet.load()
-        self.thought_bubble = ThoughtBubble(self.native_surface, self.font, lambda: (self.pet_center_x, self.pet_center_y))
 
-        self.stat_flash_timers = {}
-        self.prev_stats = PetStats()
-        self.update_prev_stats()
+        # Game state
         self.game_time = datetime.datetime.now()
         self.game_state = GameState.PET_VIEW
-
-        # --- Load Sounds and Music ---
+        self.minigame = None
+        
+        # Pet position
+        self.pet_center_x = SCREEN_WIDTH // 2
+        self.pet_center_y = SCREEN_HEIGHT // 2 + 50
+        self.pet_click_area = pygame.Rect(self.pet_center_x - 100, self.pet_center_y - 100, 200, 200)
+        
+        # UI Components
+        self.stat_bars = [
+            PixelStatBar(50, 50, 220, 40, "Happy", "😊", RETRO_YELLOW),
+            PixelStatBar(300, 50, 220, 40, "Full", "🍔", RETRO_GREEN),
+            PixelStatBar(550, 50, 220, 40, "Energy", "⚡", RETRO_BLUE),
+            PixelStatBar(800, 50, 220, 40, "Health", "❤️", RETRO_PINK),
+            PixelStatBar(1050, 50, 220, 40, "Disc", "💪", RETRO_PURPLE),
+        ]
+        
+        self.buttons = [
+            ModernRetroButton(50, 700, 180, 70, "FEED", RETRO_GREEN, "🍔", self.handle_feed),
+            ModernRetroButton(250, 700, 180, 70, "PLAY", RETRO_BLUE, "🎮", self.handle_activities),
+            ModernRetroButton(450, 700, 180, 70, "TRAIN", RETRO_PURPLE, "💪", self.handle_train),
+            ModernRetroButton(650, 700, 180, 70, "SLEEP", RETRO_ORANGE, "😴", self._toggle_sleep),
+            ModernRetroButton(850, 700, 180, 70, "SHOP", RETRO_YELLOW, "🛒", self.handle_shop),
+            ModernRetroButton(1050, 700, 180, 70, "QUIT", RETRO_PINK, "❌", lambda: sys.exit()),
+        ]
+        
+        self.bubble = MessageBubble(640, 500)
+        
+        # Inventory buttons
+        self.inventory_buttons = []
+        self.activities_buttons = []
+        
+        # Track stat changes for flashing
+        self.prev_stats = PetStats()
+        self.update_prev_stats()
+        
+        # Load sounds
         base_path = os.path.dirname(__file__)
         try:
             self.sound_click = pygame.mixer.Sound(os.path.join(base_path, "assets", "audio", "click.wav"))
@@ -229,340 +395,376 @@ class GameEngine:
             self.sound_play = pygame.mixer.Sound(os.path.join(base_path, "assets", "audio", "play.wav"))
             self.sound_heal = pygame.mixer.Sound(os.path.join(base_path, "assets", "audio", "heal.wav"))
         except pygame.error as e:
-            print(f"Warning: Could not load sound files. Game will be silent. Error: {e}")
-            self.sound_click, self.sound_eat, self.sound_play, self.sound_heal = None, None, None, None
-
-
-        self.pet_center_x, self.pet_center_y = SCREEN_WIDTH // 2, SCREEN_HEIGHT - 80 # Adjusted Y position to move pet lower
-        self.pet_click_area = pygame.Rect(self.pet_center_x - 40, self.pet_center_y - 40, 80, 80)
-
-        # UI Hitboxes - Buttons are now half as tall (20 pixels) and positioned lower, and adjusted width for new button
-        self.btn_feed = pygame.Rect(48, SCREEN_HEIGHT - 25, 60, 20)
-        self.btn_activities = pygame.Rect(113, SCREEN_HEIGHT - 25, 60, 20)
-        self.btn_train = pygame.Rect(178, SCREEN_HEIGHT - 25, 60, 20)
-        self.btn_sleep = pygame.Rect(243, SCREEN_HEIGHT - 25, 60, 20)
-        self.btn_shop = pygame.Rect(308, SCREEN_HEIGHT - 25, 60, 20)
-        self.btn_quit = pygame.Rect(373, SCREEN_HEIGHT - 25, 60, 20) # Adjusted Quit button
-        
-        self.buttons = [
-            (self.btn_feed, "FEED", self.handle_feed),
-            (self.btn_activities, "PLAY", self.handle_activities),
-            (self.btn_train, "TRAIN", self.handle_train),
-            (self.btn_sleep, "SLEEP", self._toggle_sleep),
-            (self.btn_shop, "SHOP", self.handle_shop),
-            (self.btn_quit, "QUIT", lambda: sys.exit()),
-        ]
-        self.inventory_buttons = []
-        self.activities_buttons = []
-        
-        self.minigame = None
-
-    def handle_feed(self):
-        print(f"handle_feed called. Current pet state: {self.pet.state}")
-        if self.pet.state == PetState.IDLE:
-            self.game_state = GameState.INVENTORY_VIEW
-
-    def handle_shop(self):
-        shop = TamagotchiShop()
-        shop.run()
-        # After the shop is closed, we might want to refresh the main screen
-        # or handle any items bought, if the shop returns some state.
-        # For now, it just returns control.
-
-    def handle_activities(self):
-        if self.pet.state == PetState.IDLE:
-            self.game_state = GameState.ACTIVITIES_VIEW
-
-    def handle_train(self):
-        if self.pet.state == PetState.IDLE or self.pet.state == PetState.SICK:
-            if self.sound_click: self.sound_click.play()
-            self.pet.transition_to(PetState.TRAINING)
+            print(f"Warning: Could not load sound files. Error: {e}")
+            self.sound_click = self.sound_eat = self.sound_play = self.sound_heal = None
     
-    def handle_heal(self):
-        if self.pet.state == PetState.SICK:
-            if self.sound_heal: self.sound_heal.play()
-            self.pet.heal()
-
-    def _toggle_sleep(self):
-        if self.sound_click: self.sound_click.play()
-        if self.pet.state == PetState.SLEEPING:
-            self.pet.transition_to(PetState.IDLE)
-            self.thought_bubble.show_message("Yawn... Time to play!")
-        else:
-            self.pet.transition_to(PetState.SLEEPING)
-            self.thought_bubble.show_message("Zzzzzzz...")
-
     def update_prev_stats(self):
         self.prev_stats.fullness = self.pet.stats.fullness
         self.prev_stats.happiness = self.pet.stats.happiness
         self.prev_stats.energy = self.pet.stats.energy
         self.prev_stats.health = self.pet.stats.health
         self.prev_stats.discipline = self.pet.stats.discipline
-
-    def draw_bar(self, x, y, value, color, label):
-        """Draws a progress bar with value text inside the bar."""
-        bar_width, bar_height = 80, 16 
-        
-        bar_color = color
-        stat_key = label.lower()
-        if stat_key in self.stat_flash_timers:
-            if int(self.stat_flash_timers[stat_key] * 10) % 2 == 0:
-                bar_color = (255, 255, 255)
-
-        # Label Text
-        self.native_surface.blit(self.font.render(label, False, COLOR_TEXT), (x, y - 18))
-        
-        # Bar Background
-        pygame.draw.rect(self.native_surface, COLOR_UI_BAR_BG, (x, y, bar_width, bar_height), border_radius=4)
-        
-        # Bar Fill
-        fill_width = (value / 100.0) * bar_width
-        pygame.draw.rect(self.native_surface, bar_color, (x, y, fill_width, bar_height), border_radius=4)
-        
-        # Percentage Text Overlay (inside the bar)
-        val_txt = self.font.render(f"{int(value)}%", False, COLOR_TEXT)
-        self.native_surface.blit(val_txt, (x + bar_width // 2 - val_txt.get_width() // 2, y + bar_height // 2 - val_txt.get_height() // 2))
-
-    def draw_inventory(self):
-        self.native_surface.fill(COLOR_BG)
-        title_surf = self.font.render("Inventory", False, COLOR_TEXT)
-        self.native_surface.blit(title_surf, (SCREEN_WIDTH // 2 - title_surf.get_width() // 2, 20))
-
-        self.inventory_buttons.clear()
-
-        # Add Snack button
-        snack_rect = pygame.Rect(50, 60, SCREEN_WIDTH - 100, 20) # Half height
-        self.inventory_buttons.append((snack_rect, "Snack"))
-        pygame.draw.rect(self.native_surface, COLOR_BTN, snack_rect, border_radius=5)
-        self.native_surface.blit(self.font.render("Snack (Free)", False, COLOR_TEXT), (snack_rect.x + 10, snack_rect.y + 2)) # Adjusted text y to center
-
-        inventory_items = self.db.get_inventory()
-        start_y = 90 # Adjusted start_y for next button, previous was 110. (60 + 20 + 10 padding = 90)
-
-        if not inventory_items:
-            empty_msg = self.font.render("Your inventory is empty! Buy items from the shop.", False, COLOR_TEXT)
-            self.native_surface.blit(empty_msg, empty_msg.get_rect(center=(SCREEN_WIDTH // 2, start_y + 30))) # Adjusted y for message
-        
-        for i, item in enumerate(inventory_items):
-            item_name, quantity, _, _, _ = item
-            item_text = f"{item_name} (x{quantity})"
-            item_rect = pygame.Rect(50, start_y + i * 25, SCREEN_WIDTH - 100, 20) # Half height, proportional spacing
-            self.inventory_buttons.append((item_rect, item_name))
-            pygame.draw.rect(self.native_surface, COLOR_BTN, item_rect, border_radius=5)
-            self.native_surface.blit(self.font.render(item_text, False, COLOR_TEXT), (item_rect.x + 10, item_rect.y + 2)) # Adjusted text y to center
-
-        close_button = pygame.Rect(SCREEN_WIDTH // 2 - 50, SCREEN_HEIGHT - 40, 100, 20) # Half height, adjusted y
-        self.inventory_buttons.append((close_button, "CLOSE"))
-        pygame.draw.rect(self.native_surface, COLOR_BTN, close_button, border_radius=5)
-        self.native_surface.blit(self.font.render("Close", False, COLOR_TEXT), (close_button.centerx - self.font.render("Close", False, COLOR_TEXT).get_width() // 2, close_button.y + 2)) # Adjusted text y to center
     
-    def draw_activities(self):
-        self.native_surface.fill(COLOR_BG)
-        title_surf = self.font.render("Activities", False, COLOR_TEXT)
-        self.native_surface.blit(title_surf, (SCREEN_WIDTH // 2 - title_surf.get_width() // 2, 20))
-
-        self.activities_buttons.clear()
-        
-        bouncing_pet_button = pygame.Rect(50, 60, SCREEN_WIDTH - 100, 20) # Half height
-        self.activities_buttons.append((bouncing_pet_button, "Catch the Food"))
-        pygame.draw.rect(self.native_surface, COLOR_BTN, bouncing_pet_button, border_radius=5)
-        self.native_surface.blit(self.font.render("Catch the Food", False, COLOR_TEXT), (bouncing_pet_button.x + 10, bouncing_pet_button.y + 2)) # Adjusted text y to center
-
-        gardening_button = pygame.Rect(50, 85, SCREEN_WIDTH - 100, 20) # Half height, adjusted y
-        self.activities_buttons.append((gardening_button, "Gardening"))
-        pygame.draw.rect(self.native_surface, COLOR_BTN, gardening_button, border_radius=5)
-        self.native_surface.blit(self.font.render("Gardening (WIP)", False, COLOR_TEXT), (gardening_button.x + 10, gardening_button.y + 2)) # Adjusted text y to center
-        
-        close_button = pygame.Rect(SCREEN_WIDTH // 2 - 50, SCREEN_HEIGHT - 40, 100, 20) # Half height, adjusted y
-        self.activities_buttons.append((close_button, "CLOSE"))
-        pygame.draw.rect(self.native_surface, COLOR_BTN, close_button, border_radius=5)
-        self.native_surface.blit(self.font.render("Close", False, COLOR_TEXT), (close_button.centerx - self.font.render("Close", False, COLOR_TEXT).get_width() // 2, close_button.y + 2)) # Adjusted text y to center
-
+    # ===== Event Handlers =====
+    
+    def handle_feed(self):
+        if self.pet.state == PetState.IDLE:
+            if self.sound_click:
+                self.sound_click.play()
+            self.game_state = GameState.INVENTORY_VIEW
+    
+    def handle_activities(self):
+        if self.pet.state == PetState.IDLE:
+            if self.sound_click:
+                self.sound_click.play()
+            self.game_state = GameState.ACTIVITIES_VIEW
+    
+    def handle_train(self):
+        if self.pet.state == PetState.IDLE or self.pet.state == PetState.SICK:
+            if self.sound_click:
+                self.sound_click.play()
+            self.pet.transition_to(PetState.TRAINING)
+            self.bubble.show("Training hard! 💪")
+    
+    def _toggle_sleep(self):
+        if self.sound_click:
+            self.sound_click.play()
+        if self.pet.state == PetState.SLEEPING:
+            self.pet.transition_to(PetState.IDLE)
+            self.bubble.show("Yawn... Time to play!")
+        else:
+            self.pet.transition_to(PetState.SLEEPING)
+            self.bubble.show("Zzzzz...")
+    
+    def handle_shop(self):
+        if self.sound_click:
+            self.sound_click.play()
+        shop = TamagotchiShop()
+        shop.run()
+    
+    def handle_heal(self):
+        if self.pet.state == PetState.SICK:
+            if self.sound_heal:
+                self.sound_heal.play()
+            self.pet.heal()
+            self.bubble.show("All better! 😊")
+    
     def handle_inventory_clicks(self, click_pos):
         for rect, name in self.inventory_buttons:
             if rect.collidepoint(click_pos):
                 if name == "CLOSE":
                     self.game_state = GameState.PET_VIEW
                 elif name == "Snack":
-                    item = self.db.get_item("Snack") # Get snack details from db
-
+                    item = self.db.get_item("Snack")
                     if item:
                         _, _, _, effect_stat, effect_value = item
                         current_value = getattr(self.pet.stats, effect_stat)
                         setattr(self.pet.stats, effect_stat, self.pet.stats.clamp(current_value + effect_value))
-                        self.add_game_message({"text": f"You fed {self.pet.name} a snack.", "notify": False})
+                        self.add_game_message("Fed Bobo a snack!")
+                        self.bubble.show("Yummy! 🍪")
                         self.game_state = GameState.PET_VIEW
-                        if self.sound_eat: self.sound_eat.play()
-
-
+                        if self.sound_eat:
+                            self.sound_eat.play()
+                        # Flash the appropriate stat
+                        if effect_stat == "fullness":
+                            self.stat_bars[1].flash()
+                else:
+                    # Use inventory item
+                    item = self.db.get_item(name)
+                    if item:
+                        _, _, _, effect_stat, effect_value = item
+                        current_value = getattr(self.pet.stats, effect_stat)
+                        setattr(self.pet.stats, effect_stat, self.pet.stats.clamp(current_value + effect_value))
+                        self.db.update_inventory(name, -1)
+                        self.add_game_message(f"Used {name}!")
+                        self.bubble.show(f"Thanks! 😊")
+                        self.game_state = GameState.PET_VIEW
+                        if self.sound_eat:
+                            self.sound_eat.play()
+                        # Flash appropriate stat
+                        stat_index = {"happiness": 0, "fullness": 1, "energy": 2, "health": 3, "discipline": 4}
+                        if effect_stat in stat_index:
+                            self.stat_bars[stat_index[effect_stat]].flash()
+    
     def handle_activities_clicks(self, click_pos):
         for rect, name in self.activities_buttons:
             if rect.collidepoint(click_pos):
                 if name == "CLOSE":
                     self.game_state = GameState.PET_VIEW
                 elif name == "Catch the Food":
-                    self.minigame = CatchTheFoodMinigame(self.font)
+                    self.minigame = CatchTheFoodMinigame(self.font_medium)
                     self.game_state = GameState.CATCH_THE_FOOD_MINIGAME
                 elif name == "Gardening":
-                    self.minigame = GardeningGame(self.font, self.db)
+                    self.minigame = GardeningGame(self.font_medium, self.db)
                     self.game_state = GameState.GARDENING_MINIGAME
+    
+    # ===== Drawing Methods =====
+    
+    def draw_main_view(self):
+        """Draw main pet view"""
+        # Pet
+        self.pet.draw(self.screen, self.pet_center_x, self.pet_center_y, self.font_large)
+        
+        # Thought bubble
+        self.bubble.draw(self.screen, self.font_small)
+        
+        # Stat bars
+        stats = [self.pet.stats.happiness, self.pet.stats.fullness, self.pet.stats.energy,
+                self.pet.stats.health, self.pet.stats.discipline]
+        for i, bar in enumerate(self.stat_bars):
+            bar.set_value(stats[i])
+            bar.draw(self.screen, self.font_medium, self.font_small)
+        
+        # Coins
+        coins_surf = self.font_medium.render(f"💰 {self.pet.stats.coins}", True, RETRO_DARK)
+        self.screen.blit(coins_surf, (50, 130))
+        
+        # Buttons
+        for button in self.buttons:
+            button.draw(self.screen, self.font_medium)
+        
+        # Message log
+        self.message_log.draw(self.screen, self.font_medium, self.font_small)
+    
+    def draw_inventory(self):
+        """Draw inventory screen"""
+        # Background panel (moved down by 100px)
+        panel = pygame.Rect(340, 250, 600, 500)
+        pygame.draw.rect(self.screen, RETRO_LIGHT, panel, border_radius=15)
+        pygame.draw.rect(self.screen, RETRO_DARK, panel, 5, border_radius=15)
+        
+        # Title ("CART" instead of "INVENTORY"), moved down by 100px
+        title_surf = self.font_large.render("CART", True, RETRO_DARK)
+        self.screen.blit(title_surf, (640 - title_surf.get_width() // 2, 280))
+        
+        self.inventory_buttons.clear()
+        
+        # Free snack (y=350 instead of 250)
+        snack_rect = pygame.Rect(360, 350, 560, 60)
+        self.inventory_buttons.append((snack_rect, "Snack"))
+        pygame.draw.rect(self.screen, RETRO_YELLOW, snack_rect, border_radius=8)
+        pygame.draw.rect(self.screen, RETRO_DARK, snack_rect, 4, border_radius=8)
+        snack_text = self.font_medium.render("🍪 Snack (Free)", True, RETRO_DARK)
+        self.screen.blit(snack_text, (snack_rect.centerx - snack_text.get_width() // 2,
+                                     snack_rect.centery - snack_text.get_height() // 2))
+        
+        # Inventory items (y_pos starts at 430 instead of 330)
+        inventory_items = self.db.get_inventory()
+        y_pos = 430
+        
+        if not inventory_items:
+            empty_msg = self.font_small.render("Empty! Buy items from the shop.", True, RETRO_DARK)
+            self.screen.blit(empty_msg, (640 - empty_msg.get_width() // 2, y_pos + 30))
+        
+        for item_name, quantity, _, _, _ in inventory_items:
+            item_rect = pygame.Rect(360, y_pos, 560, 60)
+            self.inventory_buttons.append((item_rect, item_name))
+            pygame.draw.rect(self.screen, RETRO_BLUE, item_rect, border_radius=8)
+            pygame.draw.rect(self.screen, RETRO_DARK, item_rect, 4, border_radius=8)
+            item_text = self.font_medium.render(f"{item_name} (x{quantity})", True, RETRO_DARK)
+            self.screen.blit(item_text, (item_rect.x + 20, item_rect.centery - item_text.get_height() // 2))
+            y_pos += 70
+        
+        # Close (y=620 instead of 520)
+        close_rect = pygame.Rect(490, 620, 300, 50)
+        self.activities_buttons.append((close_rect, "CLOSE"))
+        pygame.draw.rect(self.screen, RETRO_PINK, close_rect, border_radius=8)
+        pygame.draw.rect(self.screen, RETRO_DARK, close_rect, 4, border_radius=8)
+        close_text = self.font_small.render("Close", True, RETRO_DARK)
+        self.screen.blit(close_text, (close_rect.centerx - close_text.get_width() // 2,
+                                     close_rect.centery - close_text.get_height() // 2))
 
+    def draw_activities(self):
+        """Draw activities screen"""
+        panel = pygame.Rect(340, 200, 600, 400)
+        pygame.draw.rect(self.screen, RETRO_LIGHT, panel, border_radius=15)
+        pygame.draw.rect(self.screen, RETRO_DARK, panel, 5, border_radius=15)
+        
+        title_surf = self.font_large.render("ACTIVITIES", True, RETRO_DARK)
+        self.screen.blit(title_surf, (640 - title_surf.get_width() // 2, 230))
+        
+        self.activities_buttons.clear()
+        
+        # Catch the Food
+        catch_rect = pygame.Rect(360, 320, 560, 60)
+        self.activities_buttons.append((catch_rect, "Catch the Food"))
+        pygame.draw.rect(self.screen, RETRO_GREEN, catch_rect, border_radius=8)
+        pygame.draw.rect(self.screen, RETRO_DARK, catch_rect, 4, border_radius=8)
+        catch_text = self.font_medium.render("🍎 Catch the Food", True, RETRO_DARK)
+        self.screen.blit(catch_text, (catch_rect.centerx - catch_text.get_width() // 2,
+                                     catch_rect.centery - catch_text.get_height() // 2))
+        
+        # Gardening
+        garden_rect = pygame.Rect(360, 400, 560, 60)
+        self.activities_buttons.append((garden_rect, "Gardening"))
+        pygame.draw.rect(self.screen, RETRO_ORANGE, garden_rect, border_radius=8)
+        pygame.draw.rect(self.screen, RETRO_DARK, garden_rect, 4, border_radius=8)
+        garden_text = self.font_medium.render("🌱 Gardening", True, RETRO_DARK)
+        self.screen.blit(garden_text, (garden_rect.centerx - garden_text.get_width() // 2,
+                                      garden_rect.centery - garden_text.get_height() // 2))
+        
+        # Close
+        close_rect = pygame.Rect(490, 520, 300, 50)
+        self.activities_buttons.append((close_rect, "CLOSE"))
+        pygame.draw.rect(self.screen, RETRO_PINK, close_rect, border_radius=8)
+        pygame.draw.rect(self.screen, RETRO_DARK, close_rect, 4, border_radius=8)
+        close_text = self.font_small.render("Close", True, RETRO_DARK)
+        self.screen.blit(close_text, (close_rect.centerx - close_text.get_width() // 2,
+                                     close_rect.centery - close_text.get_height() // 2))
+    
+    # ===== Main Loop =====
+    
     def run(self):
+        """Main game loop"""
         running = True
+        last_time = time.time()
+        
         while running:
-            dt = self.clock.tick(FPS) / 1000.0
-            self.message_box.update(dt)
-            self.thought_bubble.update(dt)
+            # Delta time
+            current_time = time.time()
+            dt = current_time - last_time
+            last_time = current_time
+            dt = min(dt, 0.1)  # Cap dt to avoid large jumps
             
+            # Update game time
             self.game_time += datetime.timedelta(seconds=dt * TIME_SCALE_FACTOR)
             current_hour = self.game_time.hour
             
-            if 6 <= current_hour < 18: current_bg_color = COLOR_DAY_BG
-            elif 18 <= current_hour < 22: current_bg_color = COLOR_DUSK_BG
-            elif 5 <= current_hour < 6: current_bg_color =COLOR_DAWN_BG
-            else: current_bg_color = COLOR_NIGHT_BG            
+            # Background color based on time
+            if 6 <= current_hour < 18:
+                bg_color = COLOR_DAY_BG
+            elif 18 <= current_hour < 22:
+                bg_color = COLOR_DUSK_BG
+            elif 5 <= current_hour < 6:
+                bg_color = COLOR_DAWN_BG
+            else:
+                bg_color = COLOR_NIGHT_BG
             
-            click_pos = None
-            # Calculate scaled_mouse_pos once per frame
-            mouse_pos = pygame.mouse.get_pos()
-            scale_x = self.screen.get_width() / self.native_surface.get_width()
-            scale_y = self.screen.get_height() / self.native_surface.get_height()
-            scaled_mouse_pos = (mouse_pos[0] / scale_x, mouse_pos[1] / scale_y)
-
-            current_pointer_pos = (self.pet_center_x, SCREEN_HEIGHT - 50) # Initialize with a reasonable default
+            # Pointer position for minigames
+            current_pointer_pos = pygame.mouse.get_pos()
+            
+            # Event handling
             for event in pygame.event.get():
-                if event.type == pygame.QUIT: running = False
+                if event.type == pygame.QUIT:
+                    running = False
                 
-                if event.type == pygame.MOUSEWHEEL:
-                    if self.message_box.state == 'maximized':
-                        self.message_box.handle_scroll(event)
-
-                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    scale_x = self.screen.get_width() / self.native_surface.get_width()
-                    scale_y = self.screen.get_height() / self.native_surface.get_height()
-                    click_pos = (event.pos[0] / scale_x, event.pos[1] / scale_y)
-                elif event.type == pygame.MOUSEMOTION:
-                    scale_x = self.screen.get_width() / self.native_surface.get_width()
-                    scale_y = self.screen.get_height() / self.native_surface.get_height()
-                    current_pointer_pos = (event.pos[0] / scale_x, event.pos[1] / scale_y)
-                elif event.type == pygame.FINGERDOWN:
-                    win_w, win_h = self.native_surface.get_size()
-                    click_pos = (int(event.x * win_w), int(event.y * win_h))
-                elif event.type == pygame.FINGERMOTION:
-                    win_w, win_h = self.native_surface.get_size()
-                    current_pointer_pos = (int(event.x * win_w), int(event.y * win_h))
+                # Handle minigame events
+                if self.game_state == GameState.CATCH_THE_FOOD_MINIGAME and event.type in [pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP]:
+                    self.minigame.handle_event(event, current_pointer_pos)
+                elif self.game_state == GameState.GARDENING_MINIGAME and event.type in [pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP]:
+                    self.minigame.handle_event(event, current_pointer_pos)
                 
-                if self.game_state == GameState.CATCH_THE_FOOD_MINIGAME and click_pos:
-                    self.minigame.handle_event(event, click_pos)
-                elif self.game_state == GameState.GARDENING_MINIGAME and click_pos:
-                    self.minigame.handle_event(event, click_pos)
-
+                # Touch/click events
+                if event.type == pygame.MOUSEBUTTONUP:
+                    pos = pygame.mouse.get_pos()
+                    
+                    if self.game_state == GameState.PET_VIEW:
+                        # Check message log toggle
+                        if self.message_log.is_minimized:
+                            if self.message_log.minimized_rect.collidepoint(pos):
+                                self.message_log.toggle()
+                                if self.sound_click:
+                                    self.sound_click.play()
+                        else:
+                            if self.message_log.rect.collidepoint(pos):
+                                self.message_log.toggle()
+                                if self.sound_click:
+                                    self.sound_click.play()
+                        
+                        # Check pet click (for healing)
+                        if self.pet.state == PetState.SICK:
+                            if self.pet_click_area.collidepoint(pos):
+                                self.handle_heal()
+                        
+                        # Check buttons
+                        for button in self.buttons:
+                            button.handle_event(pos, event.type)
+                    
+                    elif self.game_state == GameState.INVENTORY_VIEW:
+                        self.handle_inventory_clicks(pos)
+                    
+                    elif self.game_state == GameState.ACTIVITIES_VIEW:
+                        self.handle_activities_clicks(pos)
+                
+                # Button press events
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    pos = pygame.mouse.get_pos()
+                    if self.game_state == GameState.PET_VIEW:
+                        for button in self.buttons:
+                            button.handle_event(pos, event.type)
+            
+            # Update minigames
             if self.game_state == GameState.CATCH_THE_FOOD_MINIGAME:
                 self.minigame.update(current_pointer_pos)
-                self.minigame.draw(self.native_surface)
                 if self.minigame.game_over_acknowledged:
                     score = self.minigame.score
-                    # Process score and rewards from Catch the Food
-                    self.pet.stats.happiness = self.pet.stats.clamp(self.pet.stats.happiness + score // 2) # Example reward
+                    self.pet.stats.happiness = self.pet.stats.clamp(self.pet.stats.happiness + score // 2)
                     coins_earned = score // 5
                     self.pet.stats.coins += coins_earned
-                    self.add_game_message({"text": f"You earned {coins_earned} coins from Catch the Food! Score: {score}", "notify": False})
+                    self.add_game_message(f"Earned {coins_earned} coins! Score: {score}")
+                    self.stat_bars[0].flash()
                     self.game_state = GameState.PET_VIEW
                     self.minigame = None
+            
             elif self.game_state == GameState.GARDENING_MINIGAME:
                 self.minigame.update()
                 if self.minigame.is_over:
                     self.game_state = GameState.PET_VIEW
                     self.minigame = None
-                else:
-                    self.minigame.draw(self.native_surface)
-            else:
-                if click_pos:
-                    if self.game_state == GameState.PET_VIEW:
-                        is_maximized_box_click = self.message_box.state == 'maximized' and self.message_box.rect.collidepoint(click_pos)
-                        is_minimized_box_click = self.message_box.state == 'minimized' and self.message_box.min_rect.collidepoint(click_pos)
-
-                        if is_maximized_box_click or is_minimized_box_click:
-                            self.message_box.toggle_state(lambda: setattr(self, 'unread_messages_count', 0))
-                            if self.sound_click: self.sound_click.play()
-                        
-                        elif self.pet.state != PetState.DEAD:
-                            if self.sound_click:
-                                if any(rect.collidepoint(click_pos) for rect, _, _ in self.buttons):
-                                    self.sound_click.play()
-                            if self.pet.state == PetState.SICK and self.pet_click_area.collidepoint(click_pos): self.handle_heal()
-                            for rect, name, action in self.buttons:
-                                if rect.collidepoint(click_pos): action()
-                    elif self.game_state == GameState.INVENTORY_VIEW: self.handle_inventory_clicks(click_pos)
-                    elif self.game_state == GameState.ACTIVITIES_VIEW: self.handle_activities_clicks(click_pos)
             
-                if self.game_state == GameState.PET_VIEW:
-                    self.pet.update(dt, current_hour)
-                    
-                    for stat in ['happiness', 'fullness', 'discipline', 'energy', 'health']:
-                        if getattr(self.pet.stats, stat) > getattr(self.prev_stats, stat):
-                            self.stat_flash_timers[stat[:5]] = 1.5
-                    for key in list(self.stat_flash_timers.keys()):
-                        self.stat_flash_timers[key] -= dt
-                        if self.stat_flash_timers[key] <= 0: del self.stat_flash_timers[key]
-                    self.update_prev_stats()
-
-                if self.game_state == GameState.PET_VIEW:
-                    self.native_surface.fill(current_bg_color)
-                    self.native_surface.blit(self.background_image, (0, 0))
-                else:
-                    self.native_surface.fill(current_bg_color)
-
-                if self.game_state == GameState.PET_VIEW:
-                        cx, cy = self.pet_center_x, self.pet_center_y
-                        self.pet.draw(self.native_surface, cx, cy, self.font)
-                        self.thought_bubble.draw()
-                        
-                        self.draw_bar(20, 30, self.pet.stats.happiness, (255, 200, 0), "Happiness")
-                        self.draw_bar(110, 30, self.pet.stats.fullness, (0, 255, 0), "Fullness")
-                        self.draw_bar(200, 30, self.pet.stats.energy, (0, 0, 255), "Energy")
-                        self.draw_bar(290, 30, self.pet.stats.health, (255, 0, 0), "Health")
-                        self.draw_bar(380, 30, self.pet.stats.discipline, (255, 0, 255), "Discipline")
-                        
-                        self.message_box.draw()
-                        
-                        points_surf = self.font.render(f"Coins: {self.pet.stats.coins}", False, COLOR_TEXT)
-                        self.native_surface.blit(points_surf, (20, 60))
-                        
-                        for rect, text, _ in self.buttons:
-                            pygame.draw.rect(self.native_surface, COLOR_BTN, rect, border_radius=5)
-                            text_surf = self.font.render(text, False, COLOR_TEXT)
-                            self.native_surface.blit(text_surf, text_surf.get_rect(center=rect.center))
-
-                elif self.game_state == GameState.INVENTORY_VIEW:
-                        self.draw_inventory()
-                elif self.game_state == GameState.ACTIVITIES_VIEW:
-                        self.draw_activities()
+            # Update pet and UI
+            if self.game_state == GameState.PET_VIEW:
+                self.pet.update(dt, current_hour)
                 
-            scaled_surface = pygame.transform.smoothscale(self.native_surface, self.screen.get_size())
-            self.screen.blit(scaled_surface, (0, 0))
-
-            # Draw pop-up message last to ensure it's on top
-            pop_up_message, is_pop_up_active = self.message_box.get_pop_up_info()
-            if is_pop_up_active:
-                pop_up_surf = self.message_box.small_font.render(pop_up_message, True, COLOR_TEXT)
-                # Position pop-up relative to the scaled screen for accurate placement
-                pop_up_rect = pop_up_surf.get_rect(center=(self.screen.get_width() // 2, 20)) 
-                pygame.draw.rect(self.screen, (0, 0, 0, 180), pop_up_rect.inflate(10, 5), border_radius=5)
-                self.screen.blit(pop_up_surf, pop_up_rect)
+                # Check for stat increases and flash
+                if self.pet.stats.happiness > self.prev_stats.happiness:
+                    self.stat_bars[0].flash()
+                if self.pet.stats.fullness > self.prev_stats.fullness:
+                    self.stat_bars[1].flash()
+                if self.pet.stats.energy > self.prev_stats.energy:
+                    self.stat_bars[2].flash()
+                if self.pet.stats.health > self.prev_stats.health:
+                    self.stat_bars[3].flash()
+                if self.pet.stats.discipline > self.prev_stats.discipline:
+                    self.stat_bars[4].flash()
+                
+                self.update_prev_stats()
+            
+            # Update UI components
+            for bar in self.stat_bars:
+                bar.update(dt)
+            self.bubble.update(dt)
+            
+            # Draw
+            self.screen.fill(bg_color)
+            
+            if self.game_state == GameState.PET_VIEW:
+                self.draw_main_view()
+            elif self.game_state == GameState.INVENTORY_VIEW:
+                self.draw_inventory()
+            elif self.game_state == GameState.ACTIVITIES_VIEW:
+                self.draw_activities()
+            elif self.game_state == GameState.CATCH_THE_FOOD_MINIGAME:
+                self.minigame.draw(self.screen)
+            elif self.game_state == GameState.GARDENING_MINIGAME:
+                self.minigame.draw(self.screen)
             
             pygame.display.flip()
+            self.clock.tick(FPS)
+        
+        pygame.quit()
+
+
+# ==================== MAIN ====================
 
 if __name__ == "__main__":
-    print("Initializing GameEngine...")
+    print("Starting Tamagotchi - Retro Edition...")
     engine = GameEngine()
-    print("GameEngine initialized. Starting run loop...")
     try:
         engine.run()
     except Exception as e:
         import traceback
-        print(f"Error during run loop: {e}")
+        print(f"Error: {e}")
         traceback.print_exc()
     finally:
-        print("Exiting game. Pygame quit.")
         pygame.quit()

@@ -5,33 +5,48 @@ import sys
 pygame.init()
 
 # Constants
-SCREEN_WIDTH = 800
-SCREEN_HEIGHT = 600
+SCREEN_WIDTH = 1280
+SCREEN_HEIGHT = 800
 FPS = 30
 
-# Colors
-DARK_BG = (45, 55, 72)
-DARKER_BG = (26, 32, 44)
-HEADER_BG = (74, 85, 104)
-CONTENT_BG = (55, 65, 81)
-LIGHT_BG = (247, 250, 252)
-CARD_BG = (226, 232, 240)
 
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-GOLD = (255, 215, 0)
-DARK_GOLD = (218, 165, 32)
+# Main UI color scheme (imported from main game claude.py)
+RETRO_DARK = (32, 36, 44)
+RETRO_LIGHT = (249, 245, 255)
+RETRO_PINK = (255, 105, 180)
+RETRO_GREEN = (0, 210, 110)
+RETRO_ORANGE = (255, 163, 72)
+RETRO_BLUE = (56, 130, 255)
+RETRO_DARKER = (20, 22, 28)
+RETRO_HEADER = (44, 48, 60)
+RETRO_CARD = (240, 232, 255)
+RETRO_BORDER = (94, 96, 110)
+RETRO_WHITE = (255, 255, 255)
+RETRO_BLACK = (0, 0, 0)
+RETRO_GOLD = (255, 215, 0)
+RETRO_DARK_GOLD = (218, 165, 32)
+RETRO_GRAY = (203, 213, 224)
+RETRO_DARK_GRAY = (74, 85, 104)
 
-# Category colors
-PINK = (255, 182, 193)
-ORANGE = (255, 165, 0)
-BLUE = (66, 153, 225)
-GREEN = (72, 187, 120)
-DARK_GREEN = (56, 161, 105)
-
-GRAY = (203, 213, 224)
-DARK_GRAY = (74, 85, 104)
-BORDER_GRAY = (160, 174, 192)
+# For compatibility with old variable names in logic
+DARK_BG = RETRO_DARK
+DARKER_BG = RETRO_DARKER
+HEADER_BG = RETRO_HEADER
+CONTENT_BG = RETRO_LIGHT
+LIGHT_BG = RETRO_CARD
+CARD_BG = RETRO_CARD
+WHITE = RETRO_WHITE
+BLACK = RETRO_BLACK
+GOLD = RETRO_GOLD
+DARK_GOLD = RETRO_DARK_GOLD
+PINK = RETRO_PINK
+ORANGE = RETRO_ORANGE
+BLUE = RETRO_BLUE
+GREEN = RETRO_GREEN
+DARK_GREEN = RETRO_GREEN
+GRAY = RETRO_GRAY
+DARK_GRAY = RETRO_DARK_GRAY
+BORDER_GRAY = RETRO_BORDER
 
 # Shop items database
 SHOP_ITEMS = {
@@ -73,15 +88,15 @@ SHOP_ITEMS = {
 }
 
 CATEGORIES = [
-    {'id': 'snacks', 'name': '🍪 SNACKS', 'color': PINK},
-    {'id': 'foods', 'name': '🍔 FOODS', 'color': ORANGE},
-    {'id': 'drinks', 'name': '🥤 DRINKS', 'color': BLUE},
-    {'id': 'energy', 'name': '⚡ ENERGY', 'color': GREEN},
+    {'id': 'snacks', 'name': '🍪 SNACKS', 'color': RETRO_PINK},
+    {'id': 'foods', 'name': '🍔 FOODS', 'color': RETRO_ORANGE},
+    {'id': 'drinks', 'name': '🥤 DRINKS', 'color': RETRO_BLUE},
+    {'id': 'energy', 'name': '⚡ ENERGY', 'color': RETRO_GREEN},
 ]
 
 
 class Button:
-    def __init__(self, x, y, width, height, text, color, text_color=WHITE):
+    def __init__(self, x, y, width, height, text, color, text_color=RETRO_WHITE):
         self.rect = pygame.Rect(x, y, width, height)
         self.text = text
         self.color = color
@@ -90,14 +105,13 @@ class Button:
         self.hover = False
 
     def draw(self, screen, font):
+        # Main UI button style: border RETRO_DARK, hover brightening
         if self.hover:
-            color = tuple(min(c + 20, 255) for c in self.color)
+            color = tuple(min(c + 32, 255) for c in self.color)
         else:
             color = self.color
-            
-        pygame.draw.rect(screen, color, self.rect, border_radius=8)
-        pygame.draw.rect(screen, DARKER_BG, self.rect, 2, border_radius=8)
-        
+        pygame.draw.rect(screen, color, self.rect, border_radius=10)
+        pygame.draw.rect(screen, RETRO_DARK, self.rect, 3, border_radius=10)
         text_surface = font.render(self.text, True, self.text_color)
         text_rect = text_surface.get_rect(center=self.rect.center)
         screen.blit(text_surface, text_rect)
@@ -114,41 +128,40 @@ class ItemCard:
         self.item = item
         self.rect = pygame.Rect(x, y, width, height)
         self.hover = False
-        
         # Buy button positioned at bottom of card
         self.buy_button = Button(
-            x + 10, 
-            y + height - 35, 
-            width - 20, 
-            28, 
-            f"💰 {item['price']}", 
-            GREEN
+            x + 10,
+            y + height - 35,
+            width - 20,
+            28,
+            f"💰 {item['price']}",
+            RETRO_GREEN,
+            text_color=RETRO_WHITE
         )
 
     def draw(self, screen, font, small_font, emoji_font):
         # Card background with hover effect
         if self.hover:
-            bg_color = (250, 250, 250)
+            bg_color = tuple(min(c + 16, 255) for c in RETRO_CARD)
         else:
-            bg_color = LIGHT_BG
-            
-        pygame.draw.rect(screen, bg_color, self.rect, border_radius=12)
-        pygame.draw.rect(screen, BORDER_GRAY, self.rect, 3, border_radius=12)
+            bg_color = RETRO_CARD
+        pygame.draw.rect(screen, bg_color, self.rect, border_radius=14)
+        pygame.draw.rect(screen, RETRO_BORDER, self.rect, 3, border_radius=14)
 
         # Icon area (64x64) - centered at top
         icon_x = self.rect.centerx - 32
         icon_y = self.rect.y + 10
         icon_rect = pygame.Rect(icon_x, icon_y, 64, 64)
-        pygame.draw.rect(screen, GRAY, icon_rect, border_radius=8)
-        pygame.draw.rect(screen, BORDER_GRAY, icon_rect, 2, border_radius=8)
-        
+        pygame.draw.rect(screen, RETRO_GRAY, icon_rect, border_radius=8)
+        pygame.draw.rect(screen, RETRO_BORDER, icon_rect, 2, border_radius=8)
+
         # Draw emoji in icon area
-        emoji_surface = emoji_font.render(self.item['emoji'], True, BLACK)
+        emoji_surface = emoji_font.render(self.item['emoji'], True, RETRO_DARK)
         emoji_rect = emoji_surface.get_rect(center=icon_rect.center)
         screen.blit(emoji_surface, emoji_rect)
 
         # Item name
-        name_surface = font.render(self.item['name'], True, BLACK)
+        name_surface = font.render(self.item['name'], True, RETRO_DARK)
         name_rect = name_surface.get_rect(centerx=self.rect.centerx, y=self.rect.y + 82)
         screen.blit(name_surface, name_rect)
 
@@ -165,11 +178,11 @@ class ItemCard:
             stats.append(f"❤️+{self.item['health']}")
 
         stats_text = ' '.join(stats)
-        stat_surface = small_font.render(stats_text, True, DARK_GRAY)
+        stat_surface = small_font.render(stats_text, True, RETRO_DARK_GRAY)
         stat_rect = stat_surface.get_rect(centerx=self.rect.centerx, y=self.rect.y + y_offset)
         screen.blit(stat_surface, stat_rect)
 
-        # Buy button
+        # Buy button (RETRO_GREEN for positive, hover brightens)
         self.buy_button.draw(screen, small_font)
 
     def update_hover(self, pos):
@@ -185,30 +198,53 @@ class TamagotchiShop:
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         pygame.display.set_caption("🏪 Pet Shop")
         self.clock = pygame.time.Clock()
-        
-        # Fonts
-        self.title_font = pygame.font.Font(None, 42)
-        self.font = pygame.font.Font(None, 22)
-        self.small_font = pygame.font.Font(None, 16)
-        self.emoji_font = pygame.font.Font(None, 48)
-        self.coin_font = pygame.font.Font(None, 32)
-        
+
+        # Main UI fonts (match claude.py)
+        self.font_large = pygame.font.Font(None, 44)
+        self.font_medium = pygame.font.Font(None, 28)
+        self.font_small = pygame.font.Font(None, 18)
+        self.emoji_font = pygame.font.Font(None, 52)
+        self.coin_font = pygame.font.Font(None, 34)
+
+        # For compatibility with old variable names
+        self.title_font = self.font_large
+        self.font = self.font_medium
+        self.small_font = self.font_small
+
         # Game state
         self.coins = 100
         self.inventory = []
         self.message = "Welcome to the shop!"
         self.message_timer = 0
         self.selected_category = 'snacks'
-        
+
         # Scroll
         self.scroll_offset = 0
         self.max_scroll = 0
-        
+
         # UI elements
         self.category_buttons = []
         self.item_cards = []
-        
+
+        # Close button
+        self.close_button = Button(
+            SCREEN_WIDTH // 2 - 150,  # center
+            SCREEN_HEIGHT - 80,       # 80px from bottom
+            300,
+            50,
+            "CLOSE",
+            RETRO_PINK,
+            text_color=RETRO_DARK
+        )
+
         self.setup_ui()
+    def draw_close_button(self):
+        self.close_button.draw(self.screen, self.font_small)
+
+    def handle_close_button(self, pos):
+        if self.close_button.is_clicked(pos):
+            return True
+        return False
 
     def setup_ui(self):
         # Create category buttons
@@ -264,117 +300,103 @@ class TamagotchiShop:
     def draw_header(self):
         # Header background
         header_rect = pygame.Rect(0, 0, SCREEN_WIDTH, 80)
-        pygame.draw.rect(self.screen, HEADER_BG, header_rect)
-        pygame.draw.rect(self.screen, BLACK, (0, 77, SCREEN_WIDTH, 3))
-        
+        pygame.draw.rect(self.screen, RETRO_HEADER, header_rect)
+        pygame.draw.rect(self.screen, RETRO_DARK, (0, 77, SCREEN_WIDTH, 3))
+
         # Shop title
-        title = self.title_font.render("🏪 PET SHOP", True, GOLD)
+        title = self.font_large.render("🏪 PET SHOP", True, RETRO_GOLD)
         self.screen.blit(title, (30, 25))
-        
+
         # Coins display
         coin_rect = pygame.Rect(SCREEN_WIDTH - 200, 20, 170, 45)
-        pygame.draw.rect(self.screen, GOLD, coin_rect, border_radius=25)
-        pygame.draw.rect(self.screen, DARK_GOLD, coin_rect, 3, border_radius=25)
-        
-        coin_text = self.coin_font.render(f"💰 {self.coins}", True, DARK_BG)
+        pygame.draw.rect(self.screen, RETRO_GOLD, coin_rect, border_radius=25)
+        pygame.draw.rect(self.screen, RETRO_DARK_GOLD, coin_rect, 3, border_radius=25)
+
+        coin_text = self.coin_font.render(f"💰 {self.coins}", True, RETRO_DARK)
         coin_text_rect = coin_text.get_rect(center=coin_rect.center)
         self.screen.blit(coin_text, coin_text_rect)
 
     def draw_message(self):
         if self.message_timer > 0:
             msg_rect = pygame.Rect(200, 90, 400, 35)
-            pygame.draw.rect(self.screen, BLUE, msg_rect, border_radius=8)
-            pygame.draw.rect(self.screen, (43, 108, 176), msg_rect, 2, border_radius=8)
-            
-            msg_surface = self.font.render(self.message, True, WHITE)
+            pygame.draw.rect(self.screen, RETRO_BLUE, msg_rect, border_radius=10)
+            pygame.draw.rect(self.screen, RETRO_DARK, msg_rect, 2, border_radius=10)
+            msg_surface = self.font_medium.render(self.message, True, RETRO_WHITE)
             msg_rect_center = msg_surface.get_rect(center=msg_rect.center)
             self.screen.blit(msg_surface, msg_rect_center)
-            
             self.message_timer -= 1
 
     def draw_category_tabs(self):
         # Tabs background
         tabs_rect = pygame.Rect(0, 80, SCREEN_WIDTH, 60)
-        pygame.draw.rect(self.screen, DARKER_BG, tabs_rect)
-        pygame.draw.rect(self.screen, BLACK, (0, 137, SCREEN_WIDTH, 2))
-        
+        pygame.draw.rect(self.screen, RETRO_DARKER, tabs_rect)
+        pygame.draw.rect(self.screen, RETRO_DARK, (0, 137, SCREEN_WIDTH, 2))
         # Draw buttons
         for btn in self.category_buttons:
             if btn.category_id == self.selected_category:
                 btn.color = btn.original_color
             else:
-                btn.color = DARK_GRAY
-            btn.draw(self.screen, self.font)
+                btn.color = RETRO_DARK_GRAY
+            btn.draw(self.screen, self.font_medium)
 
     def draw_main_content(self):
         # Content background
         content_rect = pygame.Rect(0, 140, SCREEN_WIDTH, 340)
-        pygame.draw.rect(self.screen, CONTENT_BG, content_rect)
-        
+        pygame.draw.rect(self.screen, RETRO_LIGHT, content_rect)
         # Create clipping region for scroll
         clip_rect = pygame.Rect(0, 140, SCREEN_WIDTH, 340)
         self.screen.set_clip(clip_rect)
-        
         # Draw item cards with scroll offset
         for card in self.item_cards:
             adjusted_rect = card.rect.copy()
             adjusted_rect.y -= self.scroll_offset
-            
             # Only draw if visible
             if adjusted_rect.bottom > 140 and adjusted_rect.top < 480:
                 # Temporarily adjust card position for drawing
                 original_y = card.rect.y
                 card.rect.y = adjusted_rect.y
                 card.buy_button.rect.y = adjusted_rect.y + card.rect.height - 35
-                
-                card.draw(self.screen, self.font, self.small_font, self.emoji_font)
-                
+                card.draw(self.screen, self.font_medium, self.font_small, self.emoji_font)
                 # Restore original position
                 card.rect.y = original_y
                 card.buy_button.rect.y = original_y + card.rect.height - 35
-        
         self.screen.set_clip(None)
 
     def draw_inventory(self):
         # Inventory background
         inv_rect = pygame.Rect(0, 480, SCREEN_WIDTH, 120)
-        pygame.draw.rect(self.screen, DARKER_BG, inv_rect)
-        pygame.draw.rect(self.screen, BLACK, (0, 477, SCREEN_WIDTH, 3))
-        
+        pygame.draw.rect(self.screen, RETRO_DARKER, inv_rect)
+        pygame.draw.rect(self.screen, RETRO_DARK, (0, 477, SCREEN_WIDTH, 3))
         # Inner panel
         panel_rect = pygame.Rect(20, 495, SCREEN_WIDTH - 40, 90)
-        pygame.draw.rect(self.screen, DARK_BG, panel_rect, border_radius=8)
-        pygame.draw.rect(self.screen, DARK_GRAY, panel_rect, 2, border_radius=8)
-        
+        pygame.draw.rect(self.screen, RETRO_DARK, panel_rect, border_radius=10)
+        pygame.draw.rect(self.screen, RETRO_DARK_GRAY, panel_rect, 2, border_radius=10)
         # Inventory title
-        inv_title = self.font.render(f"🎒 INVENTORY ({len(self.inventory)} items)", True, GOLD)
+        inv_title = self.font_medium.render(f"🎒 INVENTORY ({len(self.inventory)} items)", True, RETRO_GOLD)
         self.screen.blit(inv_title, (30, 500))
-        
         # Inventory items
         if not self.inventory:
-            empty_text = self.small_font.render("No items yet. Start shopping!", True, GRAY)
+            empty_text = self.font_small.render("No items yet. Start shopping!", True, RETRO_GRAY)
             self.screen.blit(empty_text, (30, 530))
         else:
             start_x = 30
             start_y = 530
             for i, item in enumerate(self.inventory[-15:]):  # Show last 15 items
                 item_rect = pygame.Rect(start_x + i * 48, start_y, 40, 40)
-                pygame.draw.rect(self.screen, DARK_GRAY, item_rect, border_radius=6)
-                pygame.draw.rect(self.screen, GRAY, item_rect, 2, border_radius=6)
-                
-                emoji_surface = self.small_font.render(item['emoji'], True, WHITE)
+                pygame.draw.rect(self.screen, RETRO_DARK_GRAY, item_rect, border_radius=8)
+                pygame.draw.rect(self.screen, RETRO_GRAY, item_rect, 2, border_radius=8)
+                emoji_surface = self.font_small.render(item['emoji'], True, RETRO_WHITE)
                 emoji_rect = emoji_surface.get_rect(center=item_rect.center)
                 self.screen.blit(emoji_surface, emoji_rect)
 
     def draw(self):
-        self.screen.fill(DARK_BG)
-        
+        self.screen.fill(RETRO_DARK)
         self.draw_header()
         self.draw_category_tabs()
         self.draw_main_content()
         self.draw_inventory()
         self.draw_message()
-        
+        self.draw_close_button()
         pygame.display.flip()
 
     def handle_events(self):
@@ -383,6 +405,7 @@ class TamagotchiShop:
         # Update hover states
         for btn in self.category_buttons:
             btn.update_hover(mouse_pos)
+        self.close_button.update_hover(mouse_pos)
         
         # Adjust mouse position for scrolled content
         adjusted_mouse_pos = (mouse_pos[0], mouse_pos[1] + self.scroll_offset)
@@ -395,6 +418,10 @@ class TamagotchiShop:
 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:  # Left click
+                    # Check close button first
+                    if self.handle_close_button(mouse_pos):
+                        return False
+
                     # Check category buttons
                     for btn in self.category_buttons:
                         if btn.is_clicked(mouse_pos):
@@ -423,9 +450,6 @@ class TamagotchiShop:
             running = self.handle_events()
             self.draw()
             self.clock.tick(FPS)
-
-        pygame.quit()
-        sys.exit()
 
 
 if __name__ == "__main__":
