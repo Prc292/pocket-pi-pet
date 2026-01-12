@@ -1,3 +1,5 @@
+import os
+
 # --- GLOBAL CONFIGURATION ---
 SCREEN_WIDTH = 480          
 SCREEN_HEIGHT = 320
@@ -6,11 +8,15 @@ DB_FILE = "pet_life.db"
 TIME_SCALE_FACTOR = 1 # 1 = real time, 10 = 10x faster!
 POINTS_PER_WIN = 10
 
+# Base directory for assets, relative to this file's location
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ASSETS_PATH = os.path.join(BASE_DIR, "assets")
+
 # --- SHOP (Prices in Coins) ---
 SHOP_ITEMS = {
     'snacks': [
         {'id': 'cookie', 'name': 'Cookie', 'price': 5, 'hunger': 10, 'energy': 5, 'happiness': 5, 'icon_path': 'delapouite/cookie.png'},
-        {'id': 'candy', 'name': 'Candy', 'price': 3, 'hunger': 5, 'energy': 3, 'happiness': 10, 'icon_path': 'delapouite/candy.png'},
+        {'id': 'candy', 'name': 'Candy', 'price': 3, 'hunger': 5, 'energy': 3, 'happiness': 10, 'icon_path': 'delapouite/candy-canes.png'},
         {'id': 'chocolate', 'name': 'Chocolate', 'price': 8, 'hunger': 12, 'energy': 8, 'happiness': 15, 'icon_path': 'rihlsul/chocolate-bar.png'},
         {'id': 'lollipop', 'name': 'Lollipop', 'price': 4, 'hunger': 5, 'energy': 2, 'happiness': 8, 'icon_path': 'delapouite/spiral-lollipop.png'},
         {'id': 'donut', 'name': 'Donut', 'price': 7, 'hunger': 15, 'energy': 5, 'happiness': 12, 'icon_path': 'delapouite/donut.png'},
@@ -19,7 +25,7 @@ SHOP_ITEMS = {
         {'id': 'chips', 'name': 'Chips', 'price': 5, 'hunger': 10, 'energy': 4, 'happiness': 6, 'icon_path': 'delapouite/chips-bag.png'},
     ],
     'foods': [
-        {'id': 'apple', 'name': 'Apple', 'price': 5, 'hunger': 15, 'energy': 8, 'health': 5, 'icon_path': 'delapouite/apple.png'},
+        {'id': 'apple', 'name': 'Apple', 'price': 5, 'hunger': 15, 'energy': 8, 'health': 5, 'icon_path': 'lorc/shiny-apple.png'},
         {'id': 'banana', 'name': 'Banana', 'price': 4, 'hunger': 12, 'energy': 10, 'health': 3, 'icon_path': 'delapouite/banana.png'},
         {'id': 'burger', 'name': 'Burger', 'price': 15, 'hunger': 35, 'energy': 15, 'happiness': 10, 'icon_path': 'delapouite/hamburger.png'},
         {'id': 'pizza', 'name': 'Pizza', 'price': 12, 'hunger': 30, 'energy': 12, 'happiness': 15, 'icon_path': 'delapouite/full-pizza.png'},
