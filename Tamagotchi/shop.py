@@ -7,7 +7,7 @@ pygame.init()
 # Constants
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
-FPS = 60
+FPS = 30
 
 # Colors
 DARK_BG = (45, 55, 72)
