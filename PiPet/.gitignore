@@ -1,0 +1,7 @@
+/PiPet/assets/icon pool 1
+/PiPet/assets/icon pool 2
+/.vscode
+/.idea
+/PiPet/__pycache__
+*.pyc
+.DS_Store

@@ -193,10 +193,10 @@ class ItemCard:
         return self.buy_button.is_clicked(pos)
 
 
-class TamagotchiShop:
+class PiPetShop:
     def __init__(self):
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-        pygame.display.set_caption("🏪 Pet Shop")
+        pygame.display.set_caption("🏪 PiPet Shop")
         self.clock = pygame.time.Clock()
 
         # Main UI fonts (match claude.py)
@@ -453,5 +453,5 @@ class TamagotchiShop:
 
 
 if __name__ == "__main__":
-    shop = TamagotchiShop()
+    shop = PiPetShop()
     shop.run()

@@ -19,7 +19,7 @@ from database import DatabaseManager
 from pet_entity import Pet
 from minigames import CatchTheFoodMinigame
 from gardening import GardeningGame
-from shop import TamagotchiShop
+from shop import PiPetShop
 
 
 class PixelStatBar:
@@ -123,10 +123,10 @@ class MessageBubble:
             return
             
         # Simple single line for now
-            text_surface = font.render(self.message, True, RETRO_DARK)
-            padding = 20
-            bubble_width = text_surface.get_width() + padding * 2
-            bubble_height = text_surface.get_height() + padding * 2        
+        text_surface = font.render(self.message, True, RETRO_DARK)
+        padding = 20
+        bubble_width = text_surface.get_width() + padding * 2
+        bubble_height = text_surface.get_height() + padding * 2        
         bubble_rect = pygame.Rect(self.x - bubble_width // 2, self.y - bubble_height - 30,
                                  bubble_width, bubble_height)
         
@@ -235,7 +235,7 @@ class GameEngine:
         pygame.mixer.init()
         
         self.screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-        pygame.display.set_caption("Tamagotchi - Retro Edition")
+        pygame.display.set_caption("PiPet - Retro Edition")
         
         self.clock = pygame.time.Clock()
         
@@ -405,7 +405,7 @@ class GameEngine:
     def handle_shop(self):
         if self.sound_click:
             self.sound_click.play()
-        shop = TamagotchiShop()
+        shop = PiPetShop()
         shop.run()
     
     def handle_heal(self):
@@ -687,7 +687,7 @@ class GameEngine:
 # ==================== MAIN ====================
 
 if __name__ == "__main__":
-    print("Starting Tamagotchi - Retro Edition...")
+    print("Starting PiPet - Retro Edition...")
     engine = GameEngine()
     try:
         engine.run()
