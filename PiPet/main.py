@@ -4,14 +4,15 @@ Full integration with your existing codebase
 Optimized for 1280x800 touchscreen on Raspberry Pi 3B
 """
 
-# Force SDL to use KMS/DRM for ChipOne USB display (no X server)
+# Force SDL to use KMS/DRM for USB display (no X server)
 import os
-os.environ["SDL_VIDEODRIVER"] = "kmsdrm"
-os.environ["SDL_RENDER_DRIVER"] = "opengl"
-os.environ["SDL_AUDIODRIVER"] = "dummy"
-os.environ["SDL_MOUSE_RELATIVE"] = "0"
-
 import sys
+# Only force KMS/DRM on Raspberry Pi (Linux, no DISPLAY)
+if sys.platform.startswith("linux") and not os.environ.get("DISPLAY"):
+    os.environ["SDL_VIDEODRIVER"] = "kmsdrm"
+    os.environ["SDL_RENDER_DRIVER"] = "opengl"
+    os.environ["SDL_AUDIODRIVER"] = "dummy"
+    os.environ["SDL_MOUSE_RELATIVE"] = "0"
 import pygame
 from ui_components import ModernRetroButton
 from typing import Tuple, Optional, Callable
