@@ -5,9 +5,6 @@ Optimized for 1280x800 touchscreen on Raspberry Pi 3B
 """
 
 import os
-os.environ["SDL_VIDEODRIVER"] = "kmsdrm"
-os.environ["SDL_RENDER_DRIVER"] = "opengl"
-os.environ["SDL_AUDIODRIVER"] = "dummy"
 import sys
 import pygame
 from ui_components import ModernRetroButton
