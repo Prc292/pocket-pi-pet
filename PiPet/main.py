@@ -394,6 +394,13 @@ class GameEngine:
         # Pet click area (uses pet's internal position)
         self.pet_click_area = pygame.Rect(self.pet.x - PET_CLICK_AREA_WIDTH // 2, self.pet.y - PET_CLICK_AREA_HEIGHT // 2, PET_CLICK_AREA_WIDTH, PET_CLICK_AREA_HEIGHT)
         
+        # Platforms (temporary, will be loaded from scene later)
+        self.platforms = [
+            pygame.Rect(0, 600, SCREEN_WIDTH, 200), # Ground
+            pygame.Rect(200, 450, 200, 20),         # Elevated platform 1
+            pygame.Rect(600, 300, 200, 20),         # Elevated platform 2
+        ]
+        
         # UI Components
         self.stat_bars = [
             PixelStatBar(50, 50, STAT_BAR_WIDTH, STAT_BAR_HEIGHT, "Happy", "😊", RETRO_BLUE),
@@ -591,6 +598,10 @@ class GameEngine:
             else:
                 self.screen.blit(obj['sprite'], obj['rect'])
 
+        # Draw platforms
+        for platform_rect in self.platforms:
+            pygame.draw.rect(self.screen, (150, 75, 0), platform_rect) # Brown color for platforms
+
         # Pet
         self.pet.draw(self.screen, self.font_large)
 
@@ -735,20 +746,17 @@ class GameEngine:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_SPACE:
                         self.pet.start_jump_animation()
-                    elif event.key == pygame.K_LEFT:
-                        self.pet.move_left(dt)
-                    elif event.key == pygame.K_RIGHT:
-                        self.pet.move_right(dt)
+
                 # Handle minigame events
                 if self.game_state == GameState.CATCH_THE_FOOD_MINIGAME and event.type in [pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP]:
                     self.minigame.handle_event(event, current_pointer_position)
                 elif self.game_state == GameState.GARDENING_MINIGAME and event.type in [pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP]:
                     self.minigame.handle_event(event, current_pointer_position)
-                
+
                 # Touch/click events
-            if event.type == pygame.MOUSEBUTTONUP:
+                if event.type == pygame.MOUSEBUTTONUP:
                     pos = pygame.mouse.get_pos()
-                    
+
                     if self.game_state == GameState.PET_VIEW:
                         # Check message log toggle
                         if self.message_log.is_minimized:
@@ -761,30 +769,30 @@ class GameEngine:
                                 self.message_log.toggle()
                                 if self.sound_click:
                                     self.sound_click.play()
-                        
+
                         # Handle toggle buttons button
                         if self.toggle_buttons_button.rect.collidepoint(pos):
                             self.toggle_buttons_button.handle_event(pos, event.type)
-                        
+
                         # Check action buttons (only if visible)
                         if self.show_buttons:
                             for button in self.action_buttons:
                                 button.handle_event(pos, event.type)
-                        
+
                         # Check pet click (for healing)
                         if self.pet.state == PetState.SICK:
                             self.pet_click_area = pygame.Rect(self.pet.x - PET_CLICK_AREA_WIDTH // 2, self.pet.y - PET_CLICK_AREA_HEIGHT // 2, PET_CLICK_AREA_WIDTH, PET_CLICK_AREA_HEIGHT)
                             if self.pet_click_area.collidepoint(pos):
                                 self.handle_heal()
-                    
+
                     elif self.game_state == GameState.INVENTORY_VIEW:
                         self.handle_inventory_clicks(pos)
-                    
+
                     elif self.game_state == GameState.ACTIVITIES_VIEW:
                         self.handle_activities_clicks(pos)
-                
+
                 # Button press events (for visual feedback on press)
-            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.type == pygame.MOUSEBUTTONDOWN:
                     pos = pygame.mouse.get_pos()
                     if self.game_state == GameState.PET_VIEW:
                         if self.show_buttons:
@@ -792,6 +800,13 @@ class GameEngine:
                                 button.handle_event(pos, event.type)
                         if self.toggle_buttons_button.rect.collidepoint(pos):
                             self.toggle_buttons_button.handle_event(pos, event.type)
+
+            # Continuous movement keys
+            keys = pygame.key.get_pressed()
+            if keys[pygame.K_LEFT]:
+                self.pet.move_left(dt)
+            if keys[pygame.K_RIGHT]:
+                self.pet.move_right(dt)
             
             # Update minigames
             if self.game_state == GameState.CATCH_THE_FOOD_MINIGAME:
@@ -814,7 +829,7 @@ class GameEngine:
             
             # Update pet and UI
             if self.game_state == GameState.PET_VIEW:
-                self.pet.update(dt, current_hour)
+                self.pet.update(dt, current_hour, self.platforms)
                 
                 # Update plant animation
                 if self.plant_animation_frames:

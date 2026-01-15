@@ -79,6 +79,20 @@ class Pet:
         self.y = initial_y
         self.move_speed = 200 # pixels per second
         
+        # Physics variables for movement
+        self.velocity_x = 0.0
+        self.velocity_y = 0.0
+        self.acceleration_x = 1000.0 # pixels/second^2
+        self.gravity = 1500.0 # pixels/second^2
+        self.jump_strength = 600.0 # initial upward velocity
+        self.max_speed_x = 300.0 # max horizontal speed
+        self.friction_x = 800.0 # deceleration when not accelerating
+        self.on_ground = False # Is the pet currently on a platform?
+
+        # Movement state for input handling
+        self.is_moving_left = False
+        self.is_moving_right = False
+        
         # Blink logic using animation manager
         self.next_blink_time = time.time() + random.uniform(2.0, 5.0)
 
@@ -165,16 +179,21 @@ class Pet:
             self.animation_manager.add_animation(PetAnimations.JUMP, jump_frames, frame_duration=0.08, loop=False)
 
 
-    def move_left(self, dt: float):
-        self.x = max(0, self.x - self.move_speed * dt)
+    def move_left(self, dt):
+        """Move pet left with frame-rate independent physics"""
+        self.velocity_x -= self.acceleration_x * dt
+        self.is_moving_left = True
 
-    def move_right(self, dt: float):
-        # We need to account for the pet's width to prevent it from going off-screen.
-        pet_width = 64 # Default
-        current_frame = self.animation_manager.get_current_frame()
-        if current_frame:
-            pet_width = current_frame.get_width()
-        self.x = min(SCREEN_WIDTH - pet_width, self.x + self.move_speed * dt)
+    def move_right(self, dt):
+        """Move pet right with frame-rate independent physics"""
+        self.velocity_x += self.acceleration_x * dt
+        self.is_moving_right = True
+
+    def jump(self):
+        if self.on_ground:
+            self.velocity_y = -self.jump_strength
+            self.on_ground = False # Immediately set to false to prevent double jump
+            self.animation_manager.set_animation(PetAnimations.JUMP)
     
     def transition_to(self, new_state: PetState):
         if self.state != new_state:
@@ -239,8 +258,8 @@ class Pet:
                     self.message_callback({"text": f"{self.name} needs more discipline to accept treatment.", "notify": False})
 
 
-    def update(self, dt, current_hour):
-        """Handles real-time stat decay, action timers, and evolution checks."""
+    def update(self, dt, current_hour, platforms=None): # Added platforms parameter
+        """Handles real-time stat decay, action timers, and evolution checks, plus physics."""
 
         scaled_dt = dt * TIME_SCALE_FACTOR
         
@@ -269,7 +288,69 @@ class Pet:
         self.prev_happiness = self.stats.happiness
         self.prev_energy = self.stats.energy
         
-        # 3. Handle Animation Timers
+        # --- Physics Update (Movement, Gravity, Collisions) ---
+
+        # Apply horizontal acceleration based on input flags
+        if self.is_moving_left:
+            self.velocity_x -= self.acceleration_x * dt
+        elif self.is_moving_right:
+            self.velocity_x += self.acceleration_x * dt
+        else:
+            # Apply friction
+            if self.velocity_x > 0:
+                self.velocity_x = max(0, self.velocity_x - self.friction_x * dt)
+            elif self.velocity_x < 0:
+                self.velocity_x = min(0, self.velocity_x + self.friction_x * dt)
+
+        # Clamp horizontal velocity
+        self.velocity_x = max(-self.max_speed_x, min(self.max_speed_x, self.velocity_x))
+
+        # Apply gravity
+        self.velocity_y += self.gravity * dt
+
+        # Update position
+        self.x += self.velocity_x * dt
+        self.y += self.velocity_y * dt
+
+        # Determine current sprite size for collision
+        pet_width = 64
+        pet_height = 64
+        current_frame = self.animation_manager.get_current_frame()
+        if current_frame:
+            pet_width = current_frame.get_width()
+            pet_height = current_frame.get_height()
+
+        # Screen bounds
+        self.x = max(pet_width // 2, min(SCREEN_WIDTH - pet_width // 2, self.x))
+
+        # Collision with platforms (bottom-center reference)
+        self.on_ground = False
+        if platforms:
+            for platform in platforms:
+                if self.velocity_y >= 0:  # Only check falling down
+                    pet_bottom = self.y
+                    pet_top = self.y - pet_height
+                    pet_left = self.x - pet_width // 2
+                    pet_right = self.x + pet_width // 2
+                    if (pet_right > platform.left and pet_left < platform.right and
+                        pet_bottom >= platform.top and pet_top < platform.top):
+                        self.y = platform.top
+                        self.velocity_y = 0
+                        self.on_ground = True
+                        break
+
+        # Fallback to bottom of screen
+        if not self.on_ground and self.y > 600:
+            self.y = 600
+            self.velocity_y = 0
+            self.on_ground = True
+
+        # Reset movement flags
+        self.is_moving_left = False
+        self.is_moving_right = False
+
+
+        # 4. Handle Animation Timers (uses updated physics position)
         self.animation_manager.update(dt)
 
         # Handle non-looping animations (e.g., jump, blink)
@@ -284,7 +365,7 @@ class Pet:
         elif self.animation_manager.current_animation == PetAnimations.BLINK and self.animation_manager.is_animation_complete():
             self.animation_manager.set_animation(PetAnimations.IDLE) # Return to idle after blink
 
-        # 4. State Checks and Evolution
+        # 5. State Checks and Evolution
         
         # Death check is prioritized
         if self.stats.health == 0.0 and self.is_alive:
@@ -337,7 +418,7 @@ class Pet:
             self.transition_to(PetState.IDLE)
 
 
-        # 5. Save state every few seconds
+        # 6. Save state every few seconds
         if time.time() - self.last_update > 5: 
             self.save()
             self.last_update = time.time()
@@ -448,7 +529,7 @@ class Pet:
         current_sprite_frame = self.animation_manager.get_current_frame()
         
         if current_sprite_frame:
-            sprite_rect = current_sprite_frame.get_rect(center=(self.x, self.y))
+            sprite_rect = current_sprite_frame.get_rect(midbottom=(self.x, self.y))
             surface.blit(current_sprite_frame, sprite_rect)
         
         # --- Action Feedback Overlay ---
