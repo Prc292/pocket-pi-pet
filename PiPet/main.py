@@ -20,7 +20,65 @@ from database import DatabaseManager
 from pet_entity import Pet
 from minigames import CatchTheFoodMinigame
 from gardening import GardeningGame
+
 from shop import PiPetShop
+
+def load_assets():
+    """Loads all assets for the editor, handling both individual images and spritesheets."""
+    assets = {}
+    base_path = os.path.dirname(__file__)
+    sprites_dir = os.path.join(base_path, "assets", "sprites")
+
+    for root, _, files in os.walk(sprites_dir):
+        for file in files:
+            if file.lower().endswith(".png"):
+                full_path = os.path.join(root, file)
+                relative_path = os.path.relpath(full_path, sprites_dir)
+                
+                # Check for a corresponding JSON file for spritesheets
+                base_name, _ = os.path.splitext(full_path)
+                json_path = base_name + ".json"
+
+                # Handle cases where json might not have '-sheet'
+                if not os.path.exists(json_path) and '-sheet' in base_name:
+                    json_path = base_name.replace('-sheet', '') + ".json"
+
+                if os.path.exists(json_path):
+                    try:
+                        spritesheet = pygame.image.load(full_path).convert_alpha()
+                        with open(json_path, 'r') as f:
+                            sprite_data = json.load(f)
+                        
+                        if "meta" in sprite_data and "slices" in sprite_data["meta"]:
+                            for slice_data in sprite_data["meta"]["slices"]:
+                                slice_name = slice_data["name"]
+                                bounds = slice_data["keys"][0]["bounds"]
+                                x, y, w, h = bounds["x"], bounds["y"], bounds["w"], bounds["h"]
+                                sub_image = spritesheet.subsurface(pygame.Rect(x, y, w, h))
+                                
+                                # Use a unique key for sub-sprites
+                                asset_key = f"{relative_path}:{slice_name}"
+                                assets[asset_key] = sub_image
+                        # Handle texture packer format
+                        elif "frames" in sprite_data:
+                            for frame_name, frame_data in sprite_data["frames"].items():
+                                frame = frame_data["frame"]
+                                x, y, w, h = frame['x'], frame['y'], frame['w'], frame['h']
+                                sub_image = spritesheet.subsurface(pygame.Rect(x, y, w, h))
+                                asset_key = f"{relative_path}:{os.path.basename(frame_name)}"
+                                assets[asset_key] = sub_image
+
+                    except Exception as e:
+                        print(f"Warning: Could not process spritesheet {full_path}: {e}")
+                else:
+                    # Load as a single image
+                    try:
+                        image = pygame.image.load(full_path).convert_alpha()
+                        assets[relative_path] = image
+                    except pygame.error as e:
+                        print(f"Warning: Could not load image {full_path}: {e}")
+    print("Loaded assets:", list(assets.keys()))
+    return assets
 
 
 class PixelStatBar:
@@ -231,24 +289,35 @@ class GameEngine:
         if text:
             self.message_log.add_message(text)
 
-    def _get_world_sprite(self, sprite_name: str) -> Optional[pygame.Surface]:
-        """
-        Extracts a specific sprite from the world spritesheet based on its name.
-        Assumes sprite_name corresponds to a 'slice' name in the JSON data.
-        """
-        for slice_data in self.world_sprite_data["meta"]["slices"]:
-            if slice_data["name"] == sprite_name:
-                # Get the bounding box from the 'bounds' key within the first keyframe
-                bounds = slice_data["keys"][0]["bounds"]
-                x, y, w, h = bounds["x"], bounds["y"], bounds["w"], bounds["h"]
-                original_sprite = self.world_spritesheet_image.subsurface(pygame.Rect(x, y, w, h))
-                return original_sprite
-        return None
+    def load_scene(self):
+        """Loads the scene from scene.json"""
+        try:
+            base_path = os.path.dirname(__file__)
+            save_file = os.path.join(os.path.dirname(base_path), "scene.json")
+            with open(save_file, 'r') as f:
+                scene_data = json.load(f)
+            
+            self.scene_objects = []
+            for data in scene_data:
+                sprite_name = data["name"]
+                if sprite_name in self.assets:
+                    sprite = self.assets[sprite_name]
+                    self.scene_objects.append({
+                        "name": sprite_name,
+                        "sprite": sprite,
+                        "rect": sprite.get_rect(topleft=data["pos"])
+                    })
+            print(f"Scene loaded from {save_file}")
+        except FileNotFoundError:
+            print("No save file found. Starting with an empty scene.")
+        except Exception as e:
+            print(f"Error loading scene: {e}")
 
-    def _get_plant_animation_frames(self, animation_prefix: str) -> List[pygame.Surface]:
+    def _get_plant_animation_frames(self, animation_prefix: str) -> list:
         """
         Extracts all frames for a given animation prefix from the plant spritesheet.
         Assumes animation frames are named with a common prefix and a numerical suffix (e.g., "GroupPlants_00000 0.png").
+        Returns a list of surfaces for each frame.
         """
         frames = []
         # Sort frame names to ensure correct animation order
@@ -260,7 +329,7 @@ class GameEngine:
             x, y, w, h = frame_data["x"], frame_data["y"], frame_data["w"], frame_data["h"]
             frames.append(self.plant_spritesheet_image.subsurface(pygame.Rect(x, y, w, h)))
         return frames
-
+        
     def __init__(self):
         pygame.init()
         pygame.mixer.init()
@@ -274,17 +343,17 @@ class GameEngine:
         self.background = pygame.transform.scale(self.background, (SCREEN_WIDTH, SCREEN_HEIGHT))
         pygame.display.set_caption("PiPet - Retro Edition")
 
-        # Load world sprite sheet and data
-        self.world_spritesheet_image = pygame.image.load(os.path.join(base_path, "assets", "sprites", "world", "Cave - Platforms-sheet.png")).convert_alpha()
-        with open(os.path.join(base_path, "assets", "sprites", "world", "Cave - Platforms.json"), 'r') as f:
-            self.world_sprite_data = json.load(f)
-
+        # Load all assets
+        self.assets = load_assets()
+        
         # Load plant sprite sheet and data
         self.plant_spritesheet_image = pygame.image.load(os.path.join(base_path, "assets", "sprites", "world", "plant_sway1-sheet.png")).convert_alpha()
         with open(os.path.join(base_path, "assets", "sprites", "world", "plant_sway1.json"), 'r') as f:
             self.plant_sprite_data = json.load(f)
+
+        self.scene_objects = []
+        self.load_scene()
         
-        # Plant animation state
         self.plant_animation_frames = self._get_plant_animation_frames("GroupPlants_00000")
         self.plant_frame_index = 0
         self.plant_animation_timer = 0.0
@@ -358,7 +427,7 @@ class GameEngine:
         except pygame.error as e:
             print(f"Warning: Could not load sound files. Error: {e}")
             self.sound_click = self.sound_eat = self.sound_play = self.sound_heal = None
-    
+
     def update_prev_stats(self):
         self.prev_stats.fullness = self.pet.stats.fullness
         self.prev_stats.happiness = self.pet.stats.happiness
@@ -496,21 +565,18 @@ class GameEngine:
     
     def draw_main_view(self):
         """Draw main pet view"""
+        # Draw scene objects
+        for obj in self.scene_objects:
+            if 'plant_sway' in obj['name']:
+                if self.plant_animation_frames:
+                    frame_surface = self.plant_animation_frames[self.plant_frame_index]
+                    self.screen.blit(frame_surface, obj['rect'].topleft)
+            else:
+                self.screen.blit(obj['sprite'], obj['rect'])
+
         # Pet
         self.pet.draw(self.screen, self.pet_center_x, self.pet_center_y, self.font_large)
 
-        # Draw block_5 at (680, 348)
-        block_5_sprite = self._get_world_sprite("block_5")
-        if block_5_sprite:
-            block_5_rect = block_5_sprite.get_rect(center=(680, 348))
-            self.screen.blit(block_5_sprite, block_5_rect)
-
-        # Draw block_6 at (500, 450)
-        block_6_sprite = self._get_world_sprite("block_6")
-        if block_6_sprite:
-            block_6_rect = block_6_sprite.get_rect(center=(500, 450))
-            self.screen.blit(block_6_sprite, block_6_rect)
-        
         # Thought bubble
         self.bubble.draw(self.screen, self.font_small)
         
@@ -599,6 +665,13 @@ class GameEngine:
                 pygame.draw.rect(self.screen, RETRO_DARK, rect, 4, border_radius=8)
                 self.screen.blit(garden_surface, (rect.centerx - garden_surface.get_width() // 2,
                                             rect.centery - garden_surface.get_height() // 2))
+
+    def draw_mouse_coordinates(self, pos):
+        """Draw mouse coordinates for debugging"""
+        font = pygame.font.Font(None, 36)
+        text = font.render(f"Mouse: ({pos[0]}, {pos[1]})", True, RETRO_DARK)
+        self.screen.blit(text, (10, 10))
+
     
     # ===== Main Loop =====
     
@@ -635,7 +708,9 @@ class GameEngine:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
-                
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_SPACE:
+                        self.pet.start_jump_animation()
                 # Handle minigame events
                 if self.game_state == GameState.CATCH_THE_FOOD_MINIGAME and event.type in [pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP]:
                     self.minigame.handle_event(event, current_pointer_position)
@@ -643,7 +718,7 @@ class GameEngine:
                     self.minigame.handle_event(event, current_pointer_position)
                 
                 # Touch/click events
-                if event.type == pygame.MOUSEBUTTONUP:
+            if event.type == pygame.MOUSEBUTTONUP:
                     pos = pygame.mouse.get_pos()
                     
                     if self.game_state == GameState.PET_VIEW:
@@ -675,7 +750,7 @@ class GameEngine:
                         self.handle_activities_clicks(pos)
                 
                 # Button press events
-                if event.type == pygame.MOUSEBUTTONDOWN:
+            if event.type == pygame.MOUSEBUTTONDOWN:
                     pos = pygame.mouse.get_pos()
                     if self.game_state == GameState.PET_VIEW:
                         for button in self.buttons:
@@ -750,6 +825,7 @@ class GameEngine:
             elif self.game_state == GameState.GARDENING_MINIGAME:
                 self.minigame.draw(self.screen)
             
+            self.draw_mouse_coordinates(pygame.mouse.get_pos())
             pygame.display.flip()
             self.clock.tick(FPS)
         

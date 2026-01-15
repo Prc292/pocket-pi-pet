@@ -6,7 +6,7 @@ import os
 import datetime
 import sqlite3
 from models import PetState, PetStats
-from constants import COLOR_PET_BODY, COLOR_PET_EYES, COLOR_HEALTH, COLOR_TEXT, COLOR_SICK, TIME_SCALE_FACTOR 
+from constants import COLOR_TEXT, TIME_SCALE_FACTOR 
 
 # --- EVOLUTION TIMES (in real seconds, scaled by TIME_SCALE_FACTOR) ---
 TIME_TO_BABY_SEC = 10.0  # 90 game-seconds (90 / 10)
@@ -54,6 +54,14 @@ class Pet:
         self.sleep_animation_timer = 0
         self.sleep_animation_speed = 0.2  # 200ms per frame
 
+        # Jump animation variables
+        self.jump_animation_frames = []
+        self.jump_frame_index = 0
+        self.jump_animation_timer = 0
+        self.jump_animation_speed = 0.1 # 100ms per frame
+        self.is_jumping = False # Flag to indicate if pet is currently jumping
+        self.jump_triggered = False # Flag to trigger jump animation only once per input
+
         self._load_sprites()
         
         # For tracking previous stats to trigger low stat messages once
@@ -71,11 +79,12 @@ class Pet:
         base_path = os.path.dirname(__file__)
         self.sprite_idle = pygame.image.load(os.path.join(base_path, "assets", "sprites", "bobo_idle.png")).convert_alpha()
         self.sprite_blink = pygame.image.load(os.path.join(base_path, "assets", "sprites", "bobo_blink.png")).convert_alpha()
-        self.sprite_sleeping = pygame.image.load(os.path.join(base_path, "assets", "sprites", "bobo_sleeping-sheet.png")).convert_alpha()
+        self.sprite_sleeping = pygame.image.load(os.path.join(base_path, "assets", "sprites", "bobo_sleeping.png")).convert_alpha()
+        self.sprite_jump = pygame.image.load(os.path.join(base_path, "assets", "sprites", "bobo_jump.png")).convert_alpha()
 
         # Parse spritesheets
         sprite_width = 64
-        sprite_height = 64
+        sprite_height = 128
         
         sheet_width_idle = self.sprite_idle.get_width()
         for x in range(0, sheet_width_idle, sprite_width):
@@ -91,6 +100,11 @@ class Pet:
         for x in range(0, sheet_width_sleeping, sprite_width):
             frame = self.sprite_sleeping.subsurface(pygame.Rect(x, 0, sprite_width, sprite_height))
             self.sleep_animation_frames.append(frame)
+            
+        sheet_width_jump = self.sprite_jump.get_width()
+        for x in range(0, sheet_width_jump, sprite_width):
+            frame = self.sprite_jump.subsurface(pygame.Rect(x, 0, sprite_width, sprite_height))
+            self.jump_animation_frames.append(frame)
     
     def transition_to(self, new_state: PetState):
         if self.state != new_state:
@@ -175,8 +189,18 @@ class Pet:
         
         # 3. Handle Animation Timers (Use real dt for smooth visuals)
 
+        # Update jump animation
+        if self.is_jumping:
+            self.jump_animation_timer += dt
+            if self.jump_animation_timer >= self.jump_animation_speed:
+                self.jump_animation_timer = 0
+                self.jump_frame_index += 1
+                if self.jump_frame_index >= len(self.jump_animation_frames):
+                    self.is_jumping = False
+                    self.jump_frame_index = 0 # Reset for next jump
+                    
         # Update idle animation
-        if not self.is_blinking:
+        if not self.is_blinking and not self.is_jumping:
             self.idle_animation_timer += dt
             if self.idle_animation_timer >= self.idle_animation_speed:
                 self.idle_animation_timer = 0
@@ -319,6 +343,13 @@ class Pet:
         }
         self.db.save_pet(pet_data)
     
+    def start_jump_animation(self):
+        """Triggers the jump animation."""
+        if not self.is_jumping:
+            self.is_jumping = True
+            self.jump_frame_index = 0
+            self.jump_animation_timer = 0
+    
     # --- Drawing Logic (Retained animation updates) ---
     def _draw_body(self, surface, cx, cy, radius, color, scale_x=1.0, scale_y=1.0):
         """Draws a base body shape (ellipse) and simple limbs with scaling applied."""
@@ -406,14 +437,17 @@ class Pet:
             surface.blit(egg_text, text_rect)
             return # Ensure nothing else is drawn when in EGG state
         
-        # For all other states, draw the current pet sprite (idle or blinking)
+        # For all other states, draw the current pet sprite (idle, blinking, or jumping)
         current_sprite_frame = None
-        if self.state == PetState.SLEEPING:
+        if self.is_jumping:
+            current_sprite_frame = self.jump_animation_frames[self.jump_frame_index]
+        elif self.state == PetState.SLEEPING:
             current_sprite_frame = self.sleep_animation_frames[self.sleep_frame_index]
         elif self.is_blinking:
             current_sprite_frame = self.blink_animation_frames[self.blink_frame_index]
         else:
             current_sprite_frame = self.idle_animation_frames[self.idle_frame_index]
+        
         
         # Apply idle bobbing animation to the sprite's position
         sprite_center_y = cy

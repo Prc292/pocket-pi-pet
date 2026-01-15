@@ -1,0 +1,26 @@
+{ "frames": {
+   "bobo_blink.png": {
+    "frame": { "x": 0, "y": 0, "w": 320, "h": 128 },
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": { "x": 0, "y": 0, "w": 320, "h": 128 },
+    "sourceSize": { "w": 320, "h": 128 },
+    "duration": 100
+   }
+ },
+ "meta": {
+  "app": "https://www.aseprite.org/",
+  "version": "1.x-dev",
+  "image": "bobo_blink-sheet.png",
+  "format": "RGBA8888",
+  "size": { "w": 320, "h": 128 },
+  "scale": "1",
+  "frameTags": [
+  ],
+  "layers": [
+   { "name": "Layer", "opacity": 255, "blendMode": "normal" }
+  ],
+  "slices": [
+  ]
+ }
+}
